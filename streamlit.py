@@ -258,5 +258,3 @@ elif pagina == "📊 Análise Estatística":
                   title="Distribuição por Status")
 
     st.plotly_chart(fig2, use_container_width=True)
-    st.title("📊 Indicadores Urbanísticos do Lote")
-    st.markdown("Insira a Indicação Fiscal para consultar os índices urbanísticos aplicáveis ao lote, como coeficiente de aproveitamento, usos permitidos e permissíveis.")
