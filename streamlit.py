@@ -53,7 +53,7 @@ def cor_status(status):
     status = str(status).lower()
     if "concluido" in status or "concluído" in status:
         return "#2ecc71"
-    elif "em andamento" in status:
+    elif "Em Andamento" in status:
         return "#95a5a6"
     else:
         return "#bdc3c7"
