@@ -9,10 +9,9 @@ from folium import IFrame
 # ============================
 # URLs 
 # ============================
-url_planilha = "COLE_AQUI_URL_RAW_EXCEL"
-url_municipios = "COLE_AQUI_URL_RAW_GEOJSON"
-url_imagens = "COLE_AQUI_URL_BASE_IMAGENS/"  # ex: github/.../imagens/
-
+url_planilha = "https://raw.githubusercontent.com/BryanSprenger/Parques-Urbanos---Instituto-gua-e-Terra/refs/heads/main/Parques%20Urbanos.csv"
+url_municipios = "https://raw.githubusercontent.com/BryanSprenger/Parques-Urbanos---Instituto-gua-e-Terra/refs/heads/main/municipios.geojson"
+url_imagens = "https://github.com/BryanSprenger/Parques-Urbanos---Instituto-gua-e-Terra/tree/main/Imagens"
 # ============================
 # CONFIG STREAMLIT
 # ============================
