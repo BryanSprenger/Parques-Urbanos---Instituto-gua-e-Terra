@@ -22,7 +22,7 @@ st.set_page_config(page_title="Parques Urbanos", layout="wide")
 # ============================
 @st.cache_data
 def carregar_dados():
-    df = pd.read_excel(url_planilha)
+    df = pd.read_csv(url_planilha)
     df.columns = df.columns.str.strip().str.lower()
 
     def limpar_coord(valor):
