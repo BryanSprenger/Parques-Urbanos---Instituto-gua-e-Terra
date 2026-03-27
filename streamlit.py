@@ -226,7 +226,7 @@ elif pagina == "🗺️ Mapa Interativo":
     st.subheader("🔍 Diagnóstico: Querência do Norte")
     
     # Filtra a linha específica (ajuste o nome se estiver diferente no CSV)
-    diagnostico = df[df['cidade'].str.contains("Querência do Norte", case=False, na=False)]
+    diagnostico = df[df['cidade'].str.contains("Porto Amazonas", case=False, na=False)]
     
     if not diagnostico.empty:
         linha = diagnostico.iloc[0]
