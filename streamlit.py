@@ -11,7 +11,7 @@ from folium import IFrame
 # ============================
 url_planilha = "https://raw.githubusercontent.com/BryanSprenger/Parques-Urbanos---Instituto-gua-e-Terra/refs/heads/main/Parques%20Urbanos.csv"
 url_municipios = "https://raw.githubusercontent.com/BryanSprenger/Parques-Urbanos---Instituto-gua-e-Terra/refs/heads/main/municipios.geojson"
-url_imagens = "https://github.com/BryanSprenger/Parques-Urbanos---Instituto-gua-e-Terra/tree/main/Imagens"
+url_imagens = "https://raw.githubusercontent.com/BryanSprenger/Parques-Urbanos---Instituto-gua-e-Terra/main/Imagens/"
 # ============================
 # CONFIG STREAMLIT
 # ============================
@@ -60,6 +60,7 @@ def cor_status(status):
 
 
 def criar_popup(row):
+
     nome = str(row.get('nome oficial do parque', 'Sem nome'))
     cidade = str(row.get('cidade', 'Não informado'))
     valor = str(row.get('valor do convênio', 'Não informado'))
@@ -67,33 +68,83 @@ def criar_popup(row):
     area = str(row.get('area', 'Não informado'))
     ano = str(row.get('ano', 'Não informado'))
 
-    # imagem via github
-    img_url = f"{url_imagens}{cidade}.png"
+    # ----------------------------
+    # URL da imagem (CORRIGIDO)
+    # ----------------------------
+    nome_img = cidade.strip().replace(" ", "%20")
+    img_url = f"{url_imagens}{nome_img}.png"
 
-    # status cor
+    # ----------------------------
+    # Cor do status
+    # ----------------------------
     cor = cor_status(status)
 
+    # ----------------------------
+    # HTML estilizado
+    # ----------------------------
     html = f"""
-    <div style="width:260px; font-family: Arial; border-radius:10px; overflow:hidden;">
-        <div style="height:160px;">
-            <img src="{img_url}" style="width:100%; height:100%; object-fit:cover;">
+    <div style="
+        width:260px;
+        font-family: 'Segoe UI', sans-serif;
+        border-radius:12px;
+        overflow:hidden;
+        box-shadow:0 4px 12px rgba(0,0,0,0.25);
+        background:white;
+    ">
+
+        <!-- Imagem -->
+        <div style="height:160px; background:#f0f0f0;">
+            <img src="{img_url}" 
+                 style="width:100%; height:100%; object-fit:cover;">
         </div>
 
-        <div style="padding:10px;">
-            <h4>{nome}</h4>
-            <span style="background:{cor}; color:white; padding:4px 8px; border-radius:6px;">
-                {status}
-            </span>
+        <!-- Conteúdo -->
+        <div style="padding:12px;">
 
-            <p><b>Cidade:</b> {cidade}</p>
-            <p><b>Ano:</b> {ano}</p>
-            <p><b>Área:</b> {area}</p>
-            <p><b>Convênio:</b> {valor}</p>
+            <h4 style="
+                margin:0 0 6px 0;
+                font-size:16px;
+                color:#2c3e50;
+            ">
+                {nome}
+            </h4>
+
+            <!-- Status -->
+            <div style="margin-bottom:8px;">
+                <span style="
+                    background:{cor};
+                    color:white;
+                    padding:4px 10px;
+                    border-radius:10px;
+                    font-size:12px;
+                    font-weight:500;
+                ">
+                    {status}
+                </span>
+            </div>
+
+            <!-- Infos -->
+            <p style="margin:3px 0; font-size:13px;">
+                <b>Cidade:</b> {cidade}
+            </p>
+
+            <p style="margin:3px 0; font-size:13px;">
+                <b>Ano:</b> {ano}
+            </p>
+
+            <p style="margin:3px 0; font-size:13px;">
+                <b>Área:</b> {area}
+            </p>
+
+            <p style="margin:3px 0; font-size:13px;">
+                <b>Convênio:</b> {valor}
+            </p>
+
         </div>
     </div>
     """
 
-    return IFrame(html=html, width=270, height=320)
+    return IFrame(html=html, width=270, height=340)
 
 
 # ============================
