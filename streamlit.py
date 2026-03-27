@@ -138,12 +138,12 @@ def criar_popup(row):
 
             valor_formatado = f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-            html = f"""
-            <p style="margin:3px 0; font-size:13px;">
-                <b>Convênio:</b> R$ {valor_formatado}
-            </p>
-            """
-            </p>
+                html = f"""
+                <p style="margin:3px 0; font-size:13px;">
+                    <b>Convênio:</b> R$ {valor_formatado}
+                </p>
+                """
+                </p>
 
         </div>
     </div>
