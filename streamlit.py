@@ -220,6 +220,31 @@ elif pagina == "🗺️ Mapa Interativo":
 
     st_folium(mapa, width=1200, height=600)
 
+    # VERIFICADOR ESPECÍFICO (ABAIXO DO MAPA)
+    # ============================
+    st.divider()
+    st.subheader("🔍 Diagnóstico: Querência do Norte")
+    
+    # Filtra a linha específica (ajuste o nome se estiver diferente no CSV)
+    diagnostico = df[df['cidade'].str.contains("Querência do Norte", case=False, na=False)]
+    
+    if not diagnostico.empty:
+        linha = diagnostico.iloc[0]
+        st.write(f"**Nome no CSV:** {linha['nome oficial do parque']}")
+        st.write(f"**Latitude lida (X):** `{linha['lat']}`")
+        st.write(f"**Longitude lida (Y):** `{linha['lon']}`")
+        st.write(f"**Status:** {linha['status']}")
+        
+        # Lógica de erro
+        if linha['lat'] < -40:
+            st.error("🚨 **Erro detectado:** A Latitude está abaixo de -40. Isso indica que as coordenadas estão INVERTIDAS na planilha (a Longitude foi digitada na coluna X).")
+        elif pd.isna(linha['lat']):
+            st.warning("⚠️ **Aviso:** As coordenadas estão vazias ou em formato inválido para esta linha.")
+        else:
+            st.success("✅ As coordenadas parecem estar dentro do intervalo esperado para o Paraná.")
+    else:
+        st.error("❌ Não foi possível encontrar a linha de 'Querência do Norte' no DataFrame. Verifique a escrita do nome na planilha.")
+
 # ============================
 # ANÁLISE
 # ============================
