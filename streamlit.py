@@ -53,7 +53,7 @@ def cor_status(status):
     status = str(status).lower()
     if "concluido" in status or "concluído" in status:
         return "#2ecc71"
-    elif "Em Andamento" in status:
+    elif "em andamento" in status:
         return "#95a5a6"
     else:
         return "#bdc3c7"
@@ -69,7 +69,7 @@ def criar_popup(row):
     ano = str(row.get('ano', 'Não informado'))
 
     # ----------------------------
-    # URL da imagem (CORRIGIDO)
+    # URL da imagem 
     # ----------------------------
     nome_img = cidade.strip().replace(" ", "%20")
     img_url = f"{url_imagens}{nome_img}.png"
@@ -136,8 +136,13 @@ def criar_popup(row):
                 <b>Área:</b> {area}
             </p>
 
+            valor_formatado = f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+            html = f"""
             <p style="margin:3px 0; font-size:13px;">
-                <b>Convênio:</b> {valor}
+                <b>Convênio:</b> R$ {valor_formatado}
+            </p>
+            """
             </p>
 
         </div>
