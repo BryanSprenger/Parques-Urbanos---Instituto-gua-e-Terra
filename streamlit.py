@@ -81,78 +81,78 @@ def criar_popup(row):
 
     # ----------------------------
     # ----------------------------
-# Formatação do valor
-# ----------------------------
-try:
-    valor_num = float(valor)
-    valor_formatado = f"{valor_num:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-except:
-    valor_formatado = str(valor)
-
-# ----------------------------
-# HTML estilizado
-# ----------------------------
-html = f"""
-<div style="
-    width:260px;
-    font-family: 'Segoe UI', sans-serif;
-    border-radius:12px;
-    overflow:hidden;
-    box-shadow:0 4px 12px rgba(0,0,0,0.25);
-    background:white;
-">
-
-    <!-- Imagem -->
-    <div style="height:160px; background:#f0f0f0;">
-        <img src="{img_url}" 
-             style="width:100%; height:100%; object-fit:cover;">
-    </div>
-
-    <!-- Conteúdo -->
-    <div style="padding:12px;">
-
-        <h4 style="
-            margin:0 0 6px 0;
-            font-size:16px;
-            color:#2c3e50;
-        ">
-            {nome}
-        </h4>
-
-        <!-- Status -->
-        <div style="margin-bottom:8px;">
-            <span style="
-                background:{cor};
-                color:white;
-                padding:4px 10px;
-                border-radius:10px;
-                font-size:12px;
-                font-weight:500;
-            ">
-                {status}
-            </span>
+    # Formatação do valor
+    # ----------------------------
+    try:
+        valor_num = float(valor)
+        valor_formatado = f"{valor_num:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except:
+        valor_formatado = str(valor)
+    
+    # ----------------------------
+    # HTML estilizado
+    # ----------------------------
+    html = f"""
+    <div style="
+        width:260px;
+        font-family: 'Segoe UI', sans-serif;
+        border-radius:12px;
+        overflow:hidden;
+        box-shadow:0 4px 12px rgba(0,0,0,0.25);
+        background:white;
+    ">
+    
+        <!-- Imagem -->
+        <div style="height:160px; background:#f0f0f0;">
+            <img src="{img_url}" 
+                 style="width:100%; height:100%; object-fit:cover;">
         </div>
-
-        <!-- Infos -->
-        <p style="margin:3px 0; font-size:13px;">
-            <b>Cidade:</b> {cidade}
-        </p>
-
-        <p style="margin:3px 0; font-size:13px;">
-            <b>Ano:</b> {ano}
-        </p>
-
-        <p style="margin:3px 0; font-size:13px;">
-            <b>Área:</b> {area}
-        </p>
-
-        <p style="margin:3px 0; font-size:13px;">
-            <b>Convênio:</b> R$ {valor_formatado}
-        </p>
-
+    
+        <!-- Conteúdo -->
+        <div style="padding:12px;">
+    
+            <h4 style="
+                margin:0 0 6px 0;
+                font-size:16px;
+                color:#2c3e50;
+            ">
+                {nome}
+            </h4>
+    
+            <!-- Status -->
+            <div style="margin-bottom:8px;">
+                <span style="
+                    background:{cor};
+                    color:white;
+                    padding:4px 10px;
+                    border-radius:10px;
+                    font-size:12px;
+                    font-weight:500;
+                ">
+                    {status}
+                </span>
+            </div>
+    
+            <!-- Infos -->
+            <p style="margin:3px 0; font-size:13px;">
+                <b>Cidade:</b> {cidade}
+            </p>
+    
+            <p style="margin:3px 0; font-size:13px;">
+                <b>Ano:</b> {ano}
+            </p>
+    
+            <p style="margin:3px 0; font-size:13px;">
+                <b>Área:</b> {area}
+            </p>
+    
+            <p style="margin:3px 0; font-size:13px;">
+                <b>Convênio:</b> R$ {valor_formatado}
+            </p>
+    
+        </div>
     </div>
-</div>
-"""
+    """
 
     return IFrame(html=html, width=270, height=340)
 
