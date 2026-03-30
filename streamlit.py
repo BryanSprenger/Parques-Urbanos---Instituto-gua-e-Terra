@@ -11,9 +11,11 @@ from folium import IFrame
 from folium.plugins import MarkerCluster, HeatMap
 
 # ============================================
-# 2. CONFIGURAÇÃO
-# ============================================
-st.set_page_config(page_title="Mapa de Parques Urbanos", layout="wide")
+st.set_page_config(
+    page_title="Parques PR | IAT",  # Altere aqui para o nome desejado
+    page_icon="🌳",                 # Adicione o emoji ou o caminho da imagem aqui
+    layout="wide"
+)
 
 # URLs
 url_planilha = "https://raw.githubusercontent.com/BryanSprenger/Parques-Urbanos---Instituto-gua-e-Terra/refs/heads/main/Parques%20Urbanos.csv"
