@@ -204,7 +204,17 @@ elif pagina == "🗺️ Mapa":
 
     st.title("🗺️ Análise Espacial dos Parques")
 
-    mapa = folium.Map(location=[-24.5, -51.5], zoom_start=7)
+    mapa = folium.Map(location=[-24.5, -51.5], zoom_start=7, tiles=None)
+
+    # Adicionando camadas base
+    folium.TileLayer('OpenStreetMap', name='Rúas (OSM)').add_to(mapa)
+    folium.TileLayer(
+        tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        attr='Esri',
+        name='Satélite',
+        overlay=False,
+        control=True
+    ).add_to(mapa)
 
     # base municipal
     folium.GeoJson(
