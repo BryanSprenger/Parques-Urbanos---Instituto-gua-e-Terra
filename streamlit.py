@@ -206,8 +206,8 @@ elif pagina == "🗺️ Mapa":
 
     st.title("🗺️ Análise Espacial dos Parques")
 
-    folium.TileLayer('OpenStreetMap', name='Rúas (OSM)').add_to(mapa)
-    mapa = folium.Map(location=[-24.5, -51.5], zoom_start=7, tiles=None)
+        folium.TileLayer('OpenStreetMap', name='Rúas (OSM)').add_to(mapa)
+        mapa = folium.Map(location=[-24.5, -51.5], zoom_start=7, tiles=None)
 
     # Adicionando camadas base
         folium.TileLayer(
