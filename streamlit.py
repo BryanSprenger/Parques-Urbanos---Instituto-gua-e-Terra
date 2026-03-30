@@ -12,8 +12,8 @@ from folium.plugins import MarkerCluster, HeatMap
 
 # ============================================
 st.set_page_config(
-    page_title="Parques PR | IAT",  # Altere aqui para o nome desejado
-    page_icon="🌳",                 # Adicione o emoji ou o caminho da imagem aqui
+    page_title="Parques Urbanos | IAT",  
+    page_icon="🌳",                 
     layout="wide"
 )
 
