@@ -74,32 +74,6 @@ df = preparar_dados(carregar_dados())
 gdf = carregar_municipios()
 
 # ============================================
-# 5. FILTROS GLOBAIS
-# ============================================
-st.sidebar.title("🔎 Filtros")
-
-municipios = sorted(df['cidade'].dropna().unique())
-status_list = sorted(df['status'].dropna().unique())
-
-filtro_municipio = st.sidebar.multiselect("Município", municipios, default=municipios)
-filtro_status = st.sidebar.multiselect("Status", status_list, default=status_list)
-
-ano_min = int(df['ano'].min())
-ano_max = int(df['ano'].max())
-
-filtro_ano = st.sidebar.slider("Ano", ano_min, ano_max, (ano_min, ano_max))
-
-mostrar_cluster = st.sidebar.checkbox("Cluster", True)
-mostrar_heatmap = st.sidebar.checkbox("Heatmap", False)
-
-# DataFrame filtrado (CORE)
-df_filtrado = df[
-    (df['cidade'].isin(filtro_municipio)) &
-    (df['status'].isin(filtro_status)) &
-    (df['ano'].between(filtro_ano[0], filtro_ano[1]))
-]
-
-# ============================================
 # 6. FUNÇÕES AUXILIARES
 # ============================================
 def cor_status(status):
@@ -149,19 +123,47 @@ def criar_popup(row):
     return IFrame(html=html, width=260, height=300)
 
 # ============================================
-# 7. MENU
+# 7. CONTROLES GLOBAIS
 # ============================================
-pagina = st.sidebar.radio(
-    "Navegação",
-    ["🏠 Home", "🗺️ Mapa", "📊 Análise"]
-)
+municipios = sorted(df['cidade'].dropna().unique())
+ano_min = int(df['ano'].min())
+ano_max = int(df['ano'].max())
+
+st.title("🌳 Parques Urbanos do Paraná")
+st.caption("Visualização interativa dos convênios de parques urbanos com foco espacial e temporal.")
+
+with st.container(border=True):
+    filtro_col1, filtro_col2, filtro_col3 = st.columns([2, 1.2, 1.2])
+    with filtro_col1:
+        filtro_municipio = st.multiselect(
+            "Municípios",
+            municipios,
+            default=municipios,
+            placeholder="Selecione um ou mais municípios"
+        )
+    with filtro_col2:
+        filtro_ano = st.slider("Intervalo de anos", ano_min, ano_max, (ano_min, ano_max))
+    with filtro_col3:
+        busca = st.text_input("Buscar parque", placeholder="Ex.: Parque Linear")
+
+# DataFrame filtrado (CORE)
+df_filtrado = df[
+    (df['cidade'].isin(filtro_municipio)) &
+    (df['ano'].between(filtro_ano[0], filtro_ano[1]))
+]
+
+if busca:
+    termo = busca.strip().lower()
+    df_filtrado = df_filtrado[
+        df_filtrado['nome oficial do parque'].astype(str).str.lower().str.contains(termo, na=False)
+    ]
+
+tab_home, tab_mapa, tab_analise = st.tabs(["🏠 Home", "🗺️ Mapa", "📊 Análise"])
 
 # ============================================
 # 8. HOME
 # ============================================
-if pagina == "🏠 Home":
-
-    st.title("🌳 Mapa de Parques Urbanos - Paraná")
+with tab_home:
 
     st.markdown("""
     ### 📌 Sobre o Projeto
@@ -202,24 +204,17 @@ if pagina == "🏠 Home":
 # ============================================
 # 9. MAPA
 # ============================================
-elif pagina == "🗺️ Mapa":
+with tab_mapa:
 
-    st.title("🗺️ Análise Espacial dos Parques")
+    st.subheader("🗺️ Análise Espacial dos Parques")
+    ctrl1, ctrl2 = st.columns(2)
+    with ctrl1:
+        mostrar_cluster = st.toggle("Ativar clusterização", value=False)
+    with ctrl2:
+        mostrar_heatmap = st.toggle("Ativar heatmap", value=False)
 
     # 1. Primeiro criamos a base do mapa
-    mapa = folium.Map(location=[-24.5, -51.5], zoom_start=7, tiles=None)
-
-    # 2. Adicionando camadas base (agora que 'mapa' já existe)
-    folium.TileLayer('OpenStreetMap', name='Rúas (OSM)').add_to(mapa)
-    
-    folium.TileLayer(
-        tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        attr='Esri',
-        name='Satélite',
-        overlay=False,
-        control=True
-    ).add_to(mapa)
-    
+    mapa = folium.Map(location=[-24.5, -51.5], zoom_start=7, tiles='OpenStreetMap')
 
     # base municipal
     folium.GeoJson(
@@ -262,16 +257,14 @@ elif pagina == "🗺️ Mapa":
         heat_data = df_filtrado[['lat', 'lon', 'valor']].dropna().values.tolist()
         HeatMap(heat_data).add_to(mapa)
 
-    folium.LayerControl().add_to(mapa)
-
     st_folium(mapa, width=1200, height=600)
 
 # ============================================
 # 10. ANÁLISE
 # ============================================
-elif pagina == "📊 Análise":
+with tab_analise:
 
-    st.title("📊 Análise Estatística")
+    st.subheader("📊 Análise Estatística")
 
     df_valid = df_filtrado.dropna(subset=['valor', 'ano'])
 
