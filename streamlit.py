@@ -262,14 +262,24 @@ filtro_status = st.sidebar.radio(
 )
 
 # --- Faixa de valor (slider) ---
-valor_min_global = int(df['valor'].dropna().min())
-valor_max_global = int(df['valor'].dropna().max())
+# Usa apenas valores numéricos válidos; fallback para 0/1 se a coluna estiver vazia
+_valores_validos = df['valor'].dropna()
+_valor_min_raw   = float(_valores_validos.min()) if len(_valores_validos) > 0 else 0.0
+_valor_max_raw   = float(_valores_validos.max()) if len(_valores_validos) > 0 else 1.0
+
+# Garante que min e max são finitos e que min < max
+import math
+valor_min_global = int(_valor_min_raw) if math.isfinite(_valor_min_raw) else 0
+valor_max_global = int(_valor_max_raw) if math.isfinite(_valor_max_raw) else 1
+if valor_min_global >= valor_max_global:
+    valor_max_global = valor_min_global + 1
+
 filtro_valor = st.sidebar.slider(
     "Valor do Convênio (R$)",
     valor_min_global,
     valor_max_global,
     (valor_min_global, valor_max_global),
-    step=10_000,
+    step=max(1, (valor_max_global - valor_min_global) // 100),   # step adaptativo
     format="R$ %d"
 )
 
