@@ -1,14 +1,14 @@
 # ============================================
 # 1. IMPORTS
 # ============================================
+import re
+import math
 import streamlit as st
 from streamlit_folium import st_folium
 import folium
 import geopandas as gpd
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
-from folium import IFrame
 from folium.plugins import MarkerCluster, HeatMap
 
 # ============================================
@@ -20,39 +20,17 @@ st.set_page_config(
     layout="wide"
 )
 
-# CSS customizado para melhorar a aparência geral
 st.markdown("""
 <style>
-    /* Fundo geral */
     .main { background-color: #f4f6f4; }
-    
-    /* Sidebar com tom esverdeado suave */
-    [data-testid="stSidebar"] {
-        background-color: #1e3d2f;
-    }
-    [data-testid="stSidebar"] * {
-        color: #e8f0eb !important;
-    }
-    [data-testid="stSidebar"] .stRadio label,
-    [data-testid="stSidebar"] .stCheckbox label {
-        color: #c8dbc e !important;
-        font-size: 0.9rem;
-    }
+
+    [data-testid="stSidebar"] { background-color: #1e3d2f; }
+    [data-testid="stSidebar"] * { color: #e8f0eb !important; }
     [data-testid="stSidebar"] h1,
     [data-testid="stSidebar"] h2,
-    [data-testid="stSidebar"] h3 {
-        color: #a8d5a2 !important;
-    }
-    [data-testid="stSidebar"] .stSlider label {
-        color: #c8dbce !important;
-    }
+    [data-testid="stSidebar"] h3 { color: #a8d5a2 !important; }
+    [data-testid="stSidebar"] hr { border-color: #3a6b4a; }
 
-    /* Divisor na sidebar */
-    [data-testid="stSidebar"] hr {
-        border-color: #3a6b4a;
-    }
-
-    /* Cards de métrica */
     [data-testid="metric-container"] {
         background-color: #ffffff;
         border: 1px solid #d4e6d4;
@@ -73,38 +51,71 @@ st.markdown("""
         font-weight: 700 !important;
     }
 
-    /* Títulos de página */
     h1 { color: #1e3d2f !important; }
     h2, h3 { color: #2e5c3e !important; }
 
-    /* Borda dos gráficos */
-    .js-plotly-plot {
-        border-radius: 12px;
-        overflow: hidden;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-    }
-    
-    /* Bloco do mapa */
     iframe {
         border-radius: 12px !important;
         box-shadow: 0 4px 14px rgba(0,0,0,0.1) !important;
     }
 
-    /* Badge de status na Home */
-    .badge {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        font-weight: 600;
-        margin-right: 6px;
-    }
-    
-    /* Separadores suaves */
     .section-divider {
         border: none;
         border-top: 2px solid #d4e6d4;
         margin: 24px 0;
+    }
+
+    .hint-box {
+        background: #f0f7f2;
+        border: 1px dashed #a8d5a2;
+        border-radius: 10px;
+        padding: 16px 20px;
+        color: #5a7a5a;
+        font-size: 0.88rem;
+        text-align: center;
+        margin-top: 4px;
+    }
+
+    .park-card {
+        background: #ffffff;
+        border: 1px solid #d4e6d4;
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    }
+    .park-card-header {
+        background: linear-gradient(135deg, #1e3d2f 0%, #2e5c3e 100%);
+        padding: 18px 22px 14px;
+    }
+    .park-card-body { padding: 4px 0 0; }
+    .detail-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 10px 22px;
+        border-bottom: 1px solid #f0f4f0;
+        font-size: 0.88rem;
+    }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-label {
+        color: #7a9a7a;
+        font-weight: 700;
+        min-width: 150px;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding-top: 2px;
+        flex-shrink: 0;
+    }
+    .detail-value { color: #1e3d2f; font-weight: 500; line-height: 1.4; }
+    .badge-status {
+        display: inline-block;
+        padding: 3px 14px;
+        border-radius: 20px;
+        font-size: 0.76rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        margin-top: 6px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -112,9 +123,9 @@ st.markdown("""
 # ============================================
 # 3. URLs
 # ============================================
-url_planilha  = "https://raw.githubusercontent.com/BryanSprenger/Parques-Urbanos---Instituto-gua-e-Terra/refs/heads/main/Parques%20Urbanos.csv"
+url_planilha   = "https://raw.githubusercontent.com/BryanSprenger/Parques-Urbanos---Instituto-gua-e-Terra/refs/heads/main/Parques%20Urbanos.csv"
 url_municipios = "https://raw.githubusercontent.com/BryanSprenger/Parques-Urbanos---Instituto-gua-e-Terra/refs/heads/main/municipios.geojson"
-url_imagens   = "https://raw.githubusercontent.com/BryanSprenger/Parques-Urbanos---Instituto-gua-e-Terra/main/Imagens/"
+url_imagens    = "https://raw.githubusercontent.com/BryanSprenger/Parques-Urbanos---Instituto-gua-e-Terra/main/Imagens/"
 
 # ============================================
 # 4. CACHE — CARREGAMENTO
@@ -122,16 +133,11 @@ url_imagens   = "https://raw.githubusercontent.com/BryanSprenger/Parques-Urbanos
 @st.cache_data
 def carregar_dados():
     df = pd.read_csv(url_planilha)
+    # Normaliza nomes: remove espaços (inclui 'coordenada x ' com trailing space)
     df.columns = df.columns.str.strip().str.lower()
 
-    def limpar_coord(valor):
-        try:
-            return float(str(valor).replace(',', '.'))
-        except:
-            return None
-
-    df['lat'] = df['coordenada x'].apply(limpar_coord)
-    df['lon'] = df['coordenada y'].apply(limpar_coord)
+    df['lat'] = df['coordenada x'].apply(_limpar_coord)
+    df['lon'] = df['coordenada y'].apply(_limpar_coord)
     return df
 
 
@@ -142,21 +148,92 @@ def carregar_municipios():
 
 
 # ============================================
-# 5. PREPARAÇÃO DOS DADOS
+# 5. FUNÇÕES DE LIMPEZA (definidas antes do cache para serem acessíveis)
+# ============================================
+def _limpar_coord(valor):
+    """
+    Coordenadas chegam em dois formatos corrompidos pelo Excel:
+      • Formato A (lotes antigos): '-2.441.473.920'  → representa -24.41473920
+        O Excel removeu a vírgula decimal e adicionou pontos de milhar.
+      • Formato B (lotes novos):   '-23.994.689'     → representa -23.994689
+        Mesma lógica, apenas menos casas decimais.
+    Ambos os formatos compartilham a mesma correção:
+      1. Remover todos os pontos (separadores de milhar introduzidos pelo Excel)
+      2. Reinserir o decimal após os 2 primeiros dígitos (coordenadas do PR
+         têm sempre 2 dígitos inteiros: lat ~-22 a -26, lon ~-48 a -55)
+      3. Forçar sinal negativo (todas as coordenadas do Paraná são negativas)
+    Também tolera entradas já corretas com vírgula decimal (-24,304103).
+    """
+    try:
+        s = str(valor).strip()
+        if s in ('', 'nan', 'NaN', 'None'):
+            return None
+        # Extrai apenas dígitos
+        digits = re.sub(r'[^0-9]', '', s)
+        if len(digits) < 3:
+            return None
+        # Insere o ponto decimal após os 2 primeiros dígitos
+        result = float(f'{digits[:2]}.{digits[2:]}')
+        # Paraná: sempre negativo
+        return -abs(result)
+    except Exception:
+        return None
+
+
+def _limpar_valor_brl(raw):
+    """
+    Converte strings no formato brasileiro 'R$ 1.234.567,89' para float.
+    Retorna None para células vazias ou marcadores como '-'.
+    """
+    s = str(raw).strip()
+    if s in ('', 'nan', 'NaN', 'None', '-'):
+        return None
+    # Remove tudo que não é dígito, vírgula ou ponto
+    s = re.sub(r'[^\d,.]', '', s)
+    s = s.replace('.', '')   # remove pontos de milhar
+    s = s.replace(',', '.')  # vírgula decimal → ponto
+    try:
+        return float(s)
+    except Exception:
+        return None
+
+
+def _limpar_area(raw):
+    """
+    Área vem como '1.756,46' (m²) — mesmo padrão de valor BRL sem prefixo.
+    """
+    return _limpar_valor_brl(raw)
+
+
+# ============================================
+# 6. PREPARAÇÃO DOS DADOS
 # ============================================
 @st.cache_data
 def preparar_dados(df):
     df = df.copy()
-    df['cidade']  = df['cidade'].astype(str)
-    df['status']  = df['status'].astype(str)
+
+    df['cidade']  = df['cidade'].astype(str).str.strip()
     df['ano']     = pd.to_numeric(df['ano'], errors='coerce')
-    df['valor']   = (
-        df['valor do convênio']
-        .astype(str)
-        .str.replace('.', '', regex=False)
-        .str.replace(',', '.', regex=False)
-    )
-    df['valor'] = pd.to_numeric(df['valor'], errors='coerce')
+
+    # Status: preserva NaN intencionalmente (células ainda não preenchidas)
+    df['status'] = df['status'].astype(str).str.strip()
+    df['status'] = df['status'].replace('nan', pd.NA)
+
+    # Valores financeiros: duas colunas separadas no novo CSV
+    # 'valor conveniado'  = valor do convênio assinado
+    # 'valor executado'   = valor efetivamente executado ('-' = não executado ainda)
+    df['valor_conveniado'] = df['valor conveniado'].apply(_limpar_valor_brl)
+    df['valor_executado']  = df['valor executado'].apply(_limpar_valor_brl)
+
+    # Área em m²
+    df['area_m2'] = df['área'].apply(_limpar_area)
+
+    # Habitantes
+    df['habitantes'] = pd.to_numeric(df['habitantes'], errors='coerce')
+
+    # Endereço: preserva como string, trata 'nan'
+    df['endereço'] = df['endereço'].astype(str).str.strip().replace('nan', pd.NA)
+
     return df
 
 
@@ -164,13 +241,13 @@ df  = preparar_dados(carregar_dados())
 gdf = carregar_municipios()
 
 # ============================================
-# 6. FUNÇÕES AUXILIARES
+# 7. FUNÇÕES AUXILIARES DE EXIBIÇÃO
 # ============================================
 def cor_status(status):
-    status = str(status).lower()
-    if "concluido" in status or "concluído" in status:
+    s = str(status).lower()
+    if "conclu" in s:
         return "#27ae60"
-    elif "em andamento" in status:
+    elif "andamento" in s:
         return "#f39c12"
     return "#95a5a6"
 
@@ -181,59 +258,81 @@ def escala_raio(valor, vmin, vmax):
     return 5 + (valor - vmin) / (vmax - vmin + 1e-9) * 14
 
 
-def criar_popup(row):
-    nome   = row.get('nome oficial do parque', 'Sem nome')
-    cidade = row.get('cidade', '')
-    valor  = row.get('valor', '')
-    status = row.get('status', '')
-    area   = row.get('area', '')
-    ano    = row.get('ano', '')
+def formatar_reais(valor):
+    """Float → 'R$ 1.234.567,89'"""
+    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-    nome_img = cidade.strip().replace(" ", "%20")
-    img_url  = f"{url_imagens}{nome_img}.png"
-    cor      = cor_status(status)
 
-    try:
-        valor_fmt = f"{float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    except:
-        valor_fmt = "—"
+def formatar_area(valor):
+    """Float → '1.756,46 m²'"""
+    if pd.isna(valor):
+        return "—"
+    return f"{valor:,.2f} m²".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def formatar_habitantes(valor):
+    if pd.isna(valor):
+        return "—"
+    return f"{int(valor):,}".replace(",", ".") + " hab."
+
+
+def criar_popup_minimo(row):
+    """
+    Popup compacto exibido ao clicar no marcador.
+    Contém apenas: imagem, nome do parque, cidade e status.
+    As demais informações são exibidas no painel abaixo do mapa.
+    """
+    nome   = str(row.get('nome oficial do parque', ''))
+    cidade = str(row.get('cidade', ''))
+    status = str(row.get('status', ''))
+    cor    = cor_status(status)
+
+    nome_display = nome if nome not in ('nan', '', 'None', '<NA>') else cidade
+    status_display = status if status not in ('nan', '', 'None', '<NA>') else 'Não informado'
+    img_url = f"{url_imagens}{cidade.strip().replace(' ', '%20')}.png"
 
     html = f"""
-    <div style="width:260px;font-family:'Segoe UI',sans-serif;background:#fff;border-radius:10px;overflow:hidden;">
-        <img src="{img_url}" style="width:100%;height:140px;object-fit:cover;"
-             onerror="this.style.display='none'">
-        <div style="padding:12px;">
-            <h4 style="margin:0 0 6px;color:#1e3d2f;font-size:0.95rem;">{nome}</h4>
-            <span style="background:{cor};color:white;padding:3px 10px;border-radius:20px;
-                         font-size:0.75rem;font-weight:600;">{status}</span>
-            <table style="margin-top:10px;width:100%;font-size:0.82rem;border-collapse:collapse;">
-                <tr><td style="color:#777;padding:3px 0;">🏙️ Cidade</td>
-                    <td style="font-weight:600;color:#333;">{cidade}</td></tr>
-                <tr><td style="color:#777;padding:3px 0;">📅 Ano</td>
-                    <td style="font-weight:600;color:#333;">{int(ano) if ano == ano else '—'}</td></tr>
-                <tr><td style="color:#777;padding:3px 0;">📐 Área</td>
-                    <td style="font-weight:600;color:#333;">{area}</td></tr>
-                <tr><td style="color:#777;padding:3px 0;">💰 Convênio</td>
-                    <td style="font-weight:600;color:#1e3d2f;">R$ {valor_fmt}</td></tr>
-            </table>
+    <div style="width:215px;font-family:'Segoe UI',sans-serif;
+                background:#fff;border-radius:10px;overflow:hidden;
+                box-shadow:0 2px 8px rgba(0,0,0,0.12);">
+        <img src="{img_url}"
+             style="width:100%;height:115px;object-fit:cover;"
+             onerror="this.parentElement.style.paddingTop='8px';this.style.display='none';">
+        <div style="padding:10px 12px 12px;">
+            <div style="font-weight:700;color:#1e3d2f;font-size:0.87rem;
+                        margin-bottom:4px;line-height:1.3;">{nome_display}</div>
+            <div style="color:#666;font-size:0.79rem;margin-bottom:7px;">🏙️ {cidade}</div>
+            <span style="background:{cor};color:white;padding:3px 10px;
+                         border-radius:20px;font-size:0.72rem;font-weight:700;">
+                {status_display}
+            </span>
         </div>
     </div>
     """
-    return IFrame(html=html, width=270, height=310)
+    return folium.Popup(html, max_width=230)
 
 
-def formatar_reais(valor):
-    return f"R$ {valor:,.0f}".replace(",", "X").replace(".", ",").replace("X", ".")
+def buscar_parque_por_coords(df_base, lat, lon, tolerancia=0.001):
+    """Retorna a linha do parque mais próxima das coordenadas clicadas no mapa."""
+    df_geo = df_base.dropna(subset=['lat', 'lon'])
+    if df_geo.empty:
+        return None
+    dist = (df_geo['lat'] - lat).abs() + (df_geo['lon'] - lon).abs()
+    idx_min = dist.idxmin()
+    return df_base.loc[idx_min] if dist[idx_min] < tolerancia else None
+
+
+def str_vazia(v):
+    return str(v) in ('nan', '', 'None', '<NA>', 'NaT')
 
 
 # ============================================
-# 7. SIDEBAR — FILTROS INTEGRADOS
+# 8. SIDEBAR — NAVEGAÇÃO E FILTROS
 # ============================================
 st.sidebar.markdown("## 🌳 Parques Urbanos")
 st.sidebar.markdown("**Instituto Água e Terra — Paraná**")
 st.sidebar.markdown("---")
 
-# Navegação
 pagina = st.sidebar.radio(
     "Navegação",
     ["🏠 Home", "🗺️ Mapa", "📊 Análise"],
@@ -243,65 +342,59 @@ pagina = st.sidebar.radio(
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🎛️ Filtros")
 
-# --- Ano (slider) ---
-ano_min = int(df['ano'].min())
-ano_max = int(df['ano'].max())
-filtro_ano = st.sidebar.slider(
-    "Período",
-    ano_min, ano_max,
-    (ano_min, ano_max),
-    format="%d"
-)
+# Filtro de período
+ano_min = int(df['ano'].dropna().min())
+ano_max = int(df['ano'].dropna().max())
+filtro_ano = st.sidebar.slider("Período", ano_min, ano_max, (ano_min, ano_max), format="%d")
 
-# --- Status (radio elegante, sem multiselect pesado) ---
-opcoes_status = ["Todos"] + sorted(df['status'].dropna().unique().tolist())
-filtro_status = st.sidebar.radio(
-    "Status",
-    opcoes_status,
-    index=0
-)
+# Filtro de status — inclui "(não preenchido)" para transparência
+_status_unicos = sorted(df['status'].dropna().unique().tolist())
+opcoes_status  = ["Todos"] + _status_unicos
+filtro_status  = st.sidebar.radio("Status", opcoes_status, index=0)
 
-# --- Faixa de valor (slider) ---
-# Usa apenas valores numéricos válidos; fallback para 0/1 se a coluna estiver vazia
-_valores_validos = df['valor'].dropna()
-_valor_min_raw   = float(_valores_validos.min()) if len(_valores_validos) > 0 else 0.0
-_valor_max_raw   = float(_valores_validos.max()) if len(_valores_validos) > 0 else 1.0
-
-# Garante que min e max são finitos e que min < max
-import math
-valor_min_global = int(_valor_min_raw) if math.isfinite(_valor_min_raw) else 0
-valor_max_global = int(_valor_max_raw) if math.isfinite(_valor_max_raw) else 1
-if valor_min_global >= valor_max_global:
-    valor_max_global = valor_min_global + 1
-
-filtro_valor = st.sidebar.slider(
-    "Valor do Convênio (R$)",
-    valor_min_global,
-    valor_max_global,
-    (valor_min_global, valor_max_global),
-    step=max(1, (valor_max_global - valor_min_global) // 100),   # step adaptativo
-    format="R$ %d"
-)
+# Filtro de valor conveniado (protegido contra NaN/inf)
+_vals = df['valor_conveniado'].dropna()
+if len(_vals) > 0 and math.isfinite(float(_vals.min())) and math.isfinite(float(_vals.max())):
+    _vmin = int(_vals.min())
+    _vmax = int(_vals.max())
+    if _vmin >= _vmax:
+        _vmax = _vmin + 1
+    filtro_valor = st.sidebar.slider(
+        "Valor Conveniado (R$)",
+        _vmin, _vmax, (_vmin, _vmax),
+        step=max(1, (_vmax - _vmin) // 100),
+        format="R$ %d"
+    )
+else:
+    filtro_valor = (0, 9_999_999_999)
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🗺️ Opções do Mapa")
-mostrar_cluster  = st.sidebar.checkbox("Clusterização", value=False)
-mostrar_heatmap  = st.sidebar.checkbox("Mapa de Calor",  value=False)
+mostrar_cluster = st.sidebar.checkbox("Clusterização", value=False)
+mostrar_heatmap = st.sidebar.checkbox("Mapa de Calor",  value=False)
 
 # ============================================
-# 8. FILTRAGEM
+# 9. FILTRAGEM
 # ============================================
+# Período: mantém linhas sem ano (serão preenchidas futuramente)
 df_filtrado = df[
-    (df['ano'].between(filtro_ano[0], filtro_ano[1])) &
-    (df['valor'].between(filtro_valor[0], filtro_valor[1], inclusive='both') |
-     df['valor'].isna())
+    df['ano'].between(filtro_ano[0], filtro_ano[1], inclusive='both') | df['ano'].isna()
+].copy()
+
+# Valor: mantém linhas sem valor (serão preenchidas futuramente)
+df_filtrado = df_filtrado[
+    df_filtrado['valor_conveniado'].between(filtro_valor[0], filtro_valor[1], inclusive='both') |
+    df_filtrado['valor_conveniado'].isna()
 ]
 
+# Status
 if filtro_status != "Todos":
     df_filtrado = df_filtrado[df_filtrado['status'] == filtro_status]
 
+df_filtrado = df_filtrado.reset_index(drop=True)
+
 # ============================================
-# 9. HOME
+# 10. HOME
 # ============================================
 if pagina == "🏠 Home":
 
@@ -309,13 +402,14 @@ if pagina == "🏠 Home":
     st.markdown("##### Monitoramento e Análise de Investimentos em Áreas Verdes Urbanas")
     st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
 
-    # KPIs rápidos no topo da Home
-    df_home = df.dropna(subset=['valor'])
+    df_home_conv = df.dropna(subset=['valor_conveniado'])
+    df_home_exec = df.dropna(subset=['valor_executado'])
+
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Parques Cadastrados",    f"{len(df):,}".replace(",", "."))
-    c2.metric("Total Investido",        formatar_reais(df_home['valor'].sum()))
-    c3.metric("Municípios Atendidos",   df['cidade'].nunique())
-    c4.metric("Período dos Dados",      f"{ano_min} – {ano_max}")
+    c1.metric("Parques Cadastrados",   f"{len(df):,}".replace(",", "."))
+    c2.metric("Total Conveniado",      formatar_reais(df_home_conv['valor_conveniado'].sum()))
+    c3.metric("Total Executado",       formatar_reais(df_home_exec['valor_executado'].sum()))
+    c4.metric("Municípios Atendidos",  df['cidade'].nunique())
 
     st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
 
@@ -332,11 +426,10 @@ if pagina == "🏠 Home":
         voltados à implantação e qualificação de **áreas verdes urbanas**, contribuindo
         para o planejamento territorial e a avaliação de políticas públicas ambientais.
         """)
-
         st.markdown("### 🎯 Objetivos")
         st.markdown("""
-        - Analisar a **distribuição espacial** dos parques
-        - Identificar **padrões territoriais** de investimento
+        - Analisar a **distribuição espacial** dos parques no Paraná
+        - Identificar **padrões temporais** de investimento público
         - Avaliar **desigualdades regionais** no acesso a áreas verdes
         - Apoiar estudos em **planejamento urbano e ambiental**
         """)
@@ -345,93 +438,91 @@ if pagina == "🏠 Home":
         st.markdown("### 🧠 Metodologia")
         st.markdown("""
         - Integração de dados tabulares de convênios públicos
-        - Georreferenciamento dos parques por coordenadas
-        - Análise espacial exploratória com SIG Web
-        - Visualização interativa com Folium e Plotly
+        - Georreferenciamento dos parques por coordenadas geográficas
+        - Análise espacial exploratória com SIG Web (Folium)
+        - Visualização interativa de indicadores com Plotly
         """)
-
         st.markdown("### ⚠️ Limitações")
         st.markdown("""
-        - Possíveis inconsistências nas coordenadas geográficas
-        - Qualidade dos dados dependente da base original
-        - Análises têm caráter **exploratório**
-        - Valores podem não refletir execução financeira total
+        - Parcela dos parques ainda sem coordenadas cadastradas
+        - Qualidade dos dados dependente da base original do IAT
+        - Análises têm caráter **exploratório**, não normativo
+        - Valores conveniados e executados podem diferir por aditivos
         """)
 
     st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
-
-    # Legenda de status
     st.markdown("### 🟢 Legenda de Status")
-    col_leg1, col_leg2, col_leg3, _ = st.columns([1, 1, 1, 3])
-    col_leg1.markdown(
-        '<span class="badge" style="background:#27ae60;color:white;">✔ Concluído</span>',
-        unsafe_allow_html=True
-    )
-    col_leg2.markdown(
-        '<span class="badge" style="background:#f39c12;color:white;">⏳ Em Andamento</span>',
-        unsafe_allow_html=True
-    )
-    col_leg3.markdown(
-        '<span class="badge" style="background:#95a5a6;color:white;">— Outros</span>',
-        unsafe_allow_html=True
-    )
+    col_l1, col_l2, col_l3, _ = st.columns([1, 1.2, 0.8, 3])
+    col_l1.markdown(
+        '<span style="background:#27ae60;color:white;padding:4px 14px;border-radius:20px;font-size:0.82rem;font-weight:700;">✔ Concluído</span>',
+        unsafe_allow_html=True)
+    col_l2.markdown(
+        '<span style="background:#f39c12;color:white;padding:4px 14px;border-radius:20px;font-size:0.82rem;font-weight:700;">⏳ Em Andamento</span>',
+        unsafe_allow_html=True)
+    col_l3.markdown(
+        '<span style="background:#95a5a6;color:white;padding:4px 14px;border-radius:20px;font-size:0.82rem;font-weight:700;">— Outros</span>',
+        unsafe_allow_html=True)
 
 # ============================================
-# 10. MAPA
+# 11. MAPA
 # ============================================
 elif pagina == "🗺️ Mapa":
 
     st.title("🗺️ Distribuição Espacial dos Parques")
 
-    # Contadores rápidos acima do mapa
-    df_mv = df_filtrado.dropna(subset=['valor'])
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Parques Exibidos",   len(df_filtrado))
-    m2.metric("Investimento Total", formatar_reais(df_mv['valor'].sum()) if len(df_mv) else "—")
-    m3.metric("Municípios",         df_filtrado['cidade'].nunique())
+    df_mv = df_filtrado.dropna(subset=['valor_conveniado'])
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Parques no Filtro",   len(df_filtrado))
+    m2.metric("Com Coordenadas",     df_filtrado.dropna(subset=['lat', 'lon']).shape[0])
+    m3.metric("Total Conveniado",    formatar_reais(df_mv['valor_conveniado'].sum()) if len(df_mv) else "—")
+    m4.metric("Municípios",          df_filtrado['cidade'].nunique())
 
     st.markdown("---")
 
-    # Base do mapa
+    # --- Mapa base ---
     mapa = folium.Map(location=[-24.5, -51.5], zoom_start=7, tiles=None)
 
-    # Camada principal: ruas (OSM)
+    # Camada 1 (padrão, ativa ao carregar): Ruas OSM
     folium.TileLayer('OpenStreetMap', name='Ruas (OSM)').add_to(mapa)
 
-    # Camada secundária: satélite
+    # Camada 2 (alternativa): Satélite
     folium.TileLayer(
         tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        attr='Esri',
-        name='Satélite',
+        attr='Esri World Imagery',
+        name='Satélite (Esri)',
         overlay=False,
         control=True
     ).add_to(mapa)
 
-    # Camada de municípios
+    # Limites dos municípios
     folium.GeoJson(
         gdf,
         style_function=lambda x: {
             'fillColor': '#2e5c3e',
-            'color':      '#4a8c5c',
-            'weight':      0.6,
+            'color':     '#4a8c5c',
+            'weight':     0.6,
             'fillOpacity': 0.05
-        }
+        },
+        name='Municípios'
     ).add_to(mapa)
 
-    # Escala de raio por valor
-    vmin = df_filtrado['valor'].min()
-    vmax = df_filtrado['valor'].max()
+    # Escala de raio proporcional ao valor conveniado
+    vmin = df_filtrado['valor_conveniado'].min()
+    vmax = df_filtrado['valor_conveniado'].max()
 
-    # Layer de marcadores (cluster ou não)
-    layer = MarkerCluster(name="Parques").add_to(mapa) if mostrar_cluster else mapa
+    layer = MarkerCluster(name="Parques (cluster)").add_to(mapa) if mostrar_cluster else mapa
 
     for _, row in df_filtrado.iterrows():
         lat, lon = row['lat'], row['lon']
         if pd.isna(lat) or pd.isna(lon):
             continue
 
-        raio = escala_raio(row['valor'], vmin, vmax)
+        raio = escala_raio(row['valor_conveniado'], vmin, vmax)
         cor  = cor_status(row['status'])
+
+        nome_tt = str(row.get('nome oficial do parque', ''))
+        if str_vazia(nome_tt):
+            nome_tt = str(row.get('cidade', ''))
 
         folium.CircleMarker(
             location=[lat, lon],
@@ -439,189 +530,341 @@ elif pagina == "🗺️ Mapa":
             color=cor,
             fill=True,
             fill_color=cor,
-            fill_opacity=0.72,
+            fill_opacity=0.75,
             weight=1.5,
-            popup=folium.Popup(criar_popup(row)),
-            tooltip=row.get('nome oficial do parque', row.get('cidade', ''))
+            popup=criar_popup_minimo(row),
+            tooltip=f"<b>{nome_tt}</b><br><small style='color:#aaa;'>clique para detalhes</small>"
         ).add_to(layer)
 
-    # Heatmap opcional
     if mostrar_heatmap:
-        heat_data = df_filtrado[['lat', 'lon', 'valor']].dropna().values.tolist()
+        heat_data = df_filtrado[['lat', 'lon', 'valor_conveniado']].dropna().values.tolist()
         HeatMap(
             heat_data,
             name="Mapa de Calor",
-            radius=18,
-            blur=14,
-            min_opacity=0.4,
+            radius=18, blur=14, min_opacity=0.4,
             gradient={0.3: '#74c69d', 0.6: '#f39c12', 1.0: '#c0392b'}
         ).add_to(mapa)
 
     folium.LayerControl(collapsed=False).add_to(mapa)
 
-    st_folium(mapa, width="100%", height=600)
+    mapa_retorno = st_folium(
+        mapa,
+        width="100%",
+        height=580,
+        returned_objects=["last_object_clicked"]
+    )
 
-    # Legenda inline
     st.markdown("""
-    <div style="display:flex;gap:20px;margin-top:8px;font-size:0.82rem;color:#555;">
+    <div style="display:flex;flex-wrap:wrap;gap:18px;margin-top:8px;font-size:0.82rem;color:#666;">
         <span>⬤ <span style="color:#27ae60;font-weight:600;">Concluído</span></span>
         <span>⬤ <span style="color:#f39c12;font-weight:600;">Em Andamento</span></span>
-        <span>⬤ <span style="color:#95a5a6;font-weight:600;">Outros</span></span>
-        <span style="margin-left:16px;">⊙ Tamanho do círculo proporcional ao valor do convênio</span>
+        <span>⬤ <span style="color:#95a5a6;font-weight:600;">Outros / Não preenchido</span></span>
+        <span style="margin-left:8px;color:#aaa;">⊙ Tamanho proporcional ao valor conveniado</span>
     </div>
     """, unsafe_allow_html=True)
 
+    # ----------------------------------------
+    # PAINEL DE DETALHES — abaixo do mapa
+    # ----------------------------------------
+    st.markdown("---")
+
+    clique = mapa_retorno.get("last_object_clicked") if mapa_retorno else None
+    if clique and clique.get("lat") and clique.get("lng"):
+        st.session_state["parque_lat"] = clique["lat"]
+        st.session_state["parque_lon"] = clique["lng"]
+
+    parque_lat = st.session_state.get("parque_lat")
+    parque_lon = st.session_state.get("parque_lon")
+    parque = buscar_parque_por_coords(df_filtrado, parque_lat, parque_lon) \
+             if (parque_lat and parque_lon) else None
+
+    if parque is None:
+        st.markdown("""
+        <div class="hint-box">
+            🖱️ <strong>Clique em um marcador no mapa</strong> para ver as informações
+            detalhadas do parque aqui abaixo.
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        nome      = str(parque.get('nome oficial do parque', ''))
+        cidade    = str(parque.get('cidade', '—'))
+        status    = str(parque.get('status', ''))
+        ano       = parque.get('ano', None)
+        v_conv    = parque.get('valor_conveniado', None)
+        v_exec    = parque.get('valor_executado', None)
+        area      = parque.get('area_m2', None)
+        hab       = parque.get('habitantes', None)
+        endereco  = str(parque.get('endereço', ''))
+        maps_url  = str(parque.get('maps', ''))
+
+        nome_display    = nome if not str_vazia(nome) else cidade
+        status_display  = status if not str_vazia(status) else 'Não preenchido'
+        cor             = cor_status(status)
+        img_url         = f"{url_imagens}{cidade.strip().replace(' ', '%20')}.png"
+
+        ano_display  = int(ano) if pd.notna(ano) else "—"
+        conv_display = formatar_reais(v_conv) if pd.notna(v_conv) else "—"
+        exec_display = formatar_reais(v_exec) if pd.notna(v_exec) else "Não executado"
+        area_display = formatar_area(area)
+        hab_display  = formatar_habitantes(hab)
+        end_display  = endereco if not str_vazia(endereco) else "—"
+
+        # Diferença conveniado vs executado
+        if pd.notna(v_conv) and pd.notna(v_exec):
+            diff = v_exec - v_conv
+            sinal = "+" if diff >= 0 else ""
+            diff_display = f"{sinal}{formatar_reais(diff)}"
+            diff_color = "#27ae60" if diff >= 0 else "#e74c3c"
+        else:
+            diff_display = None
+
+        maps_link = (
+            f'<a href="{maps_url}" target="_blank" '
+            f'style="color:#27ae60;font-weight:600;text-decoration:none;">'
+            f'🗺️ Abrir no Google Maps ↗</a>'
+            if not str_vazia(maps_url) else
+            f"{parque_lat:.5f}, {parque_lon:.5f}"
+        )
+
+        col_img, col_info = st.columns([1, 2.4])
+
+        with col_img:
+            st.markdown(f"""
+            <div style="border-radius:12px;overflow:hidden;
+                        box-shadow:0 4px 14px rgba(0,0,0,0.10);
+                        height:290px;background:#e8f0eb;">
+                <img src="{img_url}"
+                     style="width:100%;height:100%;object-fit:cover;"
+                     onerror="this.style.display='none';">
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col_info:
+            diff_row = f"""
+                    <div class="detail-row">
+                        <span class="detail-label">📊 Diferença Conv/Exec</span>
+                        <span class="detail-value"
+                              style="color:{diff_color};font-weight:700;">
+                            {diff_display}
+                        </span>
+                    </div>
+            """ if diff_display else ""
+
+            st.markdown(f"""
+            <div class="park-card">
+                <div class="park-card-header">
+                    <div style="font-size:1.1rem;font-weight:700;
+                                color:white;margin-bottom:7px;line-height:1.3;">
+                        {nome_display}
+                    </div>
+                    <span class="badge-status" style="background:{cor};color:white;">
+                        {status_display}
+                    </span>
+                </div>
+                <div class="park-card-body">
+                    <div class="detail-row">
+                        <span class="detail-label">🏙️ Município</span>
+                        <span class="detail-value">{cidade}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">📅 Ano do Convênio</span>
+                        <span class="detail-value">{ano_display}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">💰 Valor Conveniado</span>
+                        <span class="detail-value"
+                              style="color:#1e3d2f;font-weight:700;font-size:0.95rem;">
+                            {conv_display}
+                        </span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">✅ Valor Executado</span>
+                        <span class="detail-value"
+                              style="font-weight:700;">{exec_display}</span>
+                    </div>
+                    {diff_row}
+                    <div class="detail-row">
+                        <span class="detail-label">📐 Área</span>
+                        <span class="detail-value">{area_display}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">👥 Habitantes</span>
+                        <span class="detail-value">{hab_display}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">📫 Endereço</span>
+                        <span class="detail-value">{end_display}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">📍 Localização</span>
+                        <span class="detail-value">{maps_link}</span>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
 # ============================================
-# 11. ANÁLISE
+# 12. ANÁLISE
 # ============================================
 elif pagina == "📊 Análise":
 
     st.title("📊 Análise Estatística")
 
-    df_valid = df_filtrado.dropna(subset=['valor', 'ano'])
+    df_valid = df_filtrado.dropna(subset=['valor_conveniado', 'ano'])
 
-    # --- Métricas principais ---
+    # --- Métricas ---
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total Investido",     formatar_reais(df_valid['valor'].sum()))
+    c1.metric("Total Conveniado",    formatar_reais(df_valid['valor_conveniado'].sum()) if len(df_valid) else "—")
     c2.metric("Número de Parques",   len(df_filtrado))
-    c3.metric("Média por Parque",    formatar_reais(df_valid['valor'].mean()) if len(df_valid) else "—")
-    c4.metric("Maior Convênio",      formatar_reais(df_valid['valor'].max()) if len(df_valid) else "—")
+    c3.metric("Média por Parque",    formatar_reais(df_valid['valor_conveniado'].mean()) if len(df_valid) else "—")
+    c4.metric("Maior Convênio",      formatar_reais(df_valid['valor_conveniado'].max())  if len(df_valid) else "—")
 
     st.markdown("---")
 
-    # --- Linha 1: Temporal + Status ---
+    # --- Linha 1: Conveniado por ano + Status ---
     col_a, col_b = st.columns([2, 1])
 
     with col_a:
-        inv_ano = df_valid.groupby('ano')['valor'].sum().reset_index()
+        inv_ano = df_valid.groupby('ano')['valor_conveniado'].sum().reset_index()
         fig_bar = px.bar(
-            inv_ano,
-            x='ano', y='valor',
-            title="Investimento Total por Ano",
-            color='valor',
+            inv_ano, x='ano', y='valor_conveniado',
+            title="Valor Conveniado por Ano",
+            color='valor_conveniado',
             color_continuous_scale=[[0, '#74c69d'], [0.5, '#2e5c3e'], [1, '#1e3d2f']],
-            labels={'valor': 'Investimento (R$)', 'ano': 'Ano'}
+            labels={'valor_conveniado': 'Valor Conveniado (R$)', 'ano': 'Ano'}
         )
         fig_bar.update_layout(
             plot_bgcolor='white', paper_bgcolor='white',
             coloraxis_showscale=False,
             font=dict(family='Segoe UI', size=12),
-            title_font_size=15,
-            margin=dict(t=40, b=30)
+            title_font_size=15, margin=dict(t=40, b=30)
         )
         fig_bar.update_traces(marker_line_width=0)
         st.plotly_chart(fig_bar, use_container_width=True)
 
     with col_b:
-        status_count = df_filtrado['status'].value_counts().reset_index()
+        # Status: substitui NaN por rótulo legível apenas para este gráfico
+        status_plot = df_filtrado['status'].fillna('Não preenchido')
+        status_count = status_plot.value_counts().reset_index()
         status_count.columns = ['status', 'quantidade']
 
-        cores_status = {
-            s: cor_status(s) for s in status_count['status']
-        }
-
         fig_pie = px.pie(
-            status_count,
-            names='status',
-            values='quantidade',
+            status_count, names='status', values='quantidade',
             title="Distribuição por Status",
             color='status',
-            color_discrete_map=cores_status,
+            color_discrete_map={s: cor_status(s) for s in status_count['status']},
             hole=0.45
         )
         fig_pie.update_layout(
             plot_bgcolor='white', paper_bgcolor='white',
             font=dict(family='Segoe UI', size=11),
             title_font_size=15,
-            legend=dict(orientation='h', yanchor='bottom', y=-0.25),
+            legend=dict(orientation='h', yanchor='bottom', y=-0.3),
             margin=dict(t=40, b=10)
         )
         fig_pie.update_traces(textinfo='percent+label', showlegend=False)
         st.plotly_chart(fig_pie, use_container_width=True)
 
-    # --- Linha 2: Top municípios + Distribuição de valores ---
+    # --- Linha 2: Conveniado vs Executado por ano + Top municípios ---
     col_c, col_d = st.columns(2)
 
     with col_c:
+        df_comp = df_filtrado.dropna(subset=['ano'])
+        g_conv = df_comp.groupby('ano')['valor_conveniado'].sum().reset_index()
+        g_exec = df_comp.groupby('ano')['valor_executado'].sum().reset_index()
+        g_comp = g_conv.merge(g_exec, on='ano', how='left')
+
+        fig_comp = px.bar(
+            g_comp.melt(id_vars='ano',
+                        value_vars=['valor_conveniado', 'valor_executado'],
+                        var_name='tipo', value_name='valor'),
+            x='ano', y='valor', color='tipo', barmode='group',
+            title="Conveniado vs Executado por Ano",
+            color_discrete_map={
+                'valor_conveniado': '#2e5c3e',
+                'valor_executado':  '#74c69d'
+            },
+            labels={'valor': 'R$', 'ano': 'Ano', 'tipo': ''}
+        )
+        fig_comp.update_layout(
+            plot_bgcolor='white', paper_bgcolor='white',
+            font=dict(family='Segoe UI', size=11),
+            title_font_size=15, margin=dict(t=40, b=30),
+            legend=dict(orientation='h', yanchor='bottom', y=-0.25)
+        )
+        fig_comp.update_traces(marker_line_width=0)
+        newnames = {'valor_conveniado': 'Conveniado', 'valor_executado': 'Executado'}
+        fig_comp.for_each_trace(lambda t: t.update(name=newnames.get(t.name, t.name)))
+        st.plotly_chart(fig_comp, use_container_width=True)
+
+    with col_d:
         top_cidades = (
-            df_valid.groupby('cidade')['valor']
-            .sum()
-            .sort_values(ascending=True)
-            .tail(12)
-            .reset_index()
+            df_valid.groupby('cidade')['valor_conveniado']
+            .sum().sort_values(ascending=True).tail(12).reset_index()
         )
         fig_h = px.bar(
-            top_cidades,
-            x='valor', y='cidade',
-            orientation='h',
-            title="Top 12 Municípios por Investimento",
-            color='valor',
+            top_cidades, x='valor_conveniado', y='cidade', orientation='h',
+            title="Top 12 Municípios por Valor Conveniado",
+            color='valor_conveniado',
             color_continuous_scale=[[0, '#a8d5a2'], [1, '#1e3d2f']],
-            labels={'valor': 'Investimento (R$)', 'cidade': ''}
+            labels={'valor_conveniado': 'R$', 'cidade': ''}
         )
         fig_h.update_layout(
             plot_bgcolor='white', paper_bgcolor='white',
             coloraxis_showscale=False,
             font=dict(family='Segoe UI', size=11),
-            title_font_size=15,
-            margin=dict(t=40, b=30)
+            title_font_size=15, margin=dict(t=40, b=30)
         )
         fig_h.update_traces(marker_line_width=0)
         st.plotly_chart(fig_h, use_container_width=True)
 
-    with col_d:
+    # --- Linha 3: Distribuição de valores + Acumulado ---
+    col_e, col_f = st.columns(2)
+
+    with col_e:
         fig_hist = px.histogram(
-            df_valid,
-            x='valor',
-            nbins=20,
-            title="Distribuição dos Valores de Convênio",
+            df_valid, x='valor_conveniado', nbins=20,
+            title="Distribuição dos Valores Conveniados",
             color_discrete_sequence=['#2e5c3e'],
-            labels={'valor': 'Valor do Convênio (R$)', 'count': 'Quantidade'}
+            labels={'valor_conveniado': 'Valor Conveniado (R$)', 'count': 'Quantidade'}
         )
         fig_hist.update_layout(
             plot_bgcolor='white', paper_bgcolor='white',
             font=dict(family='Segoe UI', size=11),
-            title_font_size=15,
-            bargap=0.08,
-            margin=dict(t=40, b=30)
+            title_font_size=15, bargap=0.08, margin=dict(t=40, b=30)
         )
         st.plotly_chart(fig_hist, use_container_width=True)
 
-    # --- Linha 3: Evolução acumulada + Parques por município ---
-    col_e, col_f = st.columns(2)
-
-    with col_e:
+    with col_f:
         inv_acum = inv_ano.copy()
-        inv_acum['acumulado'] = inv_acum['valor'].cumsum()
+        inv_acum['acumulado'] = inv_acum['valor_conveniado'].cumsum()
         fig_line = px.line(
-            inv_acum,
-            x='ano', y='acumulado',
-            title="Investimento Acumulado ao Longo do Tempo",
+            inv_acum, x='ano', y='acumulado',
+            title="Valor Conveniado Acumulado",
             markers=True,
             color_discrete_sequence=['#27ae60'],
-            labels={'acumulado': 'Investimento Acumulado (R$)', 'ano': 'Ano'}
+            labels={'acumulado': 'Valor Acumulado (R$)', 'ano': 'Ano'}
         )
         fig_line.update_traces(line_width=2.5, marker_size=7)
         fig_line.update_layout(
             plot_bgcolor='white', paper_bgcolor='white',
             font=dict(family='Segoe UI', size=11),
-            title_font_size=15,
-            margin=dict(t=40, b=30)
+            title_font_size=15, margin=dict(t=40, b=30)
         )
         st.plotly_chart(fig_line, use_container_width=True)
 
-    with col_f:
+    # --- Linha 4: Parques por município + Habitantes ---
+    col_g, col_h = st.columns(2)
+
+    with col_g:
         parques_cidade = (
-            df_filtrado.groupby('cidade')
-            .size()
-            .sort_values(ascending=False)
-            .head(10)
+            df_filtrado.groupby('cidade').size()
+            .sort_values(ascending=False).head(10)
             .reset_index(name='quantidade')
         )
         fig_pc = px.bar(
-            parques_cidade,
-            x='cidade', y='quantidade',
-            title="Top 10 Municípios por Número de Parques",
+            parques_cidade, x='cidade', y='quantidade',
+            title="Top 10 Municípios por Nº de Parques",
             color='quantidade',
             color_continuous_scale=[[0, '#a8d5a2'], [1, '#1e3d2f']],
             labels={'quantidade': 'Nº de Parques', 'cidade': ''}
@@ -630,30 +873,67 @@ elif pagina == "📊 Análise":
             plot_bgcolor='white', paper_bgcolor='white',
             coloraxis_showscale=False,
             font=dict(family='Segoe UI', size=11),
-            title_font_size=15,
-            xaxis_tickangle=-35,
-            margin=dict(t=40, b=60)
+            title_font_size=15, xaxis_tickangle=-35, margin=dict(t=40, b=60)
         )
         fig_pc.update_traces(marker_line_width=0)
         st.plotly_chart(fig_pc, use_container_width=True)
+
+    with col_h:
+        df_vph = df_filtrado.dropna(subset=['valor_conveniado', 'habitantes']).copy()
+        if len(df_vph) > 0:
+            df_vph['valor_por_hab'] = df_vph['valor_conveniado'] / df_vph['habitantes']
+            top_vph = df_vph.nlargest(12, 'valor_por_hab')[['cidade', 'valor_por_hab']].sort_values('valor_por_hab')
+            fig_vph = px.bar(
+                top_vph, x='valor_por_hab', y='cidade', orientation='h',
+                title="Valor Conveniado por Habitante (Top 12)",
+                color='valor_por_hab',
+                color_continuous_scale=[[0, '#a8d5a2'], [1, '#1e3d2f']],
+                labels={'valor_por_hab': 'R$ / Hab.', 'cidade': ''}
+            )
+            fig_vph.update_layout(
+                plot_bgcolor='white', paper_bgcolor='white',
+                coloraxis_showscale=False,
+                font=dict(family='Segoe UI', size=11),
+                title_font_size=15, margin=dict(t=40, b=30)
+            )
+            fig_vph.update_traces(marker_line_width=0)
+            st.plotly_chart(fig_vph, use_container_width=True)
 
     # --- Tabela detalhada ---
     st.markdown("---")
     st.markdown("### 📋 Tabela de Parques")
 
-    colunas_exibir = ['nome oficial do parque', 'cidade', 'status', 'ano', 'valor']
-    colunas_validas = [c for c in colunas_exibir if c in df_filtrado.columns]
+    cols_map = {
+        'nome oficial do parque': 'Nome',
+        'cidade':                 'Município',
+        'status':                 'Status',
+        'ano':                    'Ano',
+        'valor_conveniado':       'Valor Conveniado',
+        'valor_executado':        'Valor Executado',
+        'area_m2':                'Área (m²)',
+        'habitantes':             'Habitantes',
+    }
+    cols_validas = [c for c in cols_map if c in df_filtrado.columns]
+    df_tabela = df_filtrado[cols_validas].copy().rename(columns=cols_map)
 
-    df_tabela = df_filtrado[colunas_validas].copy()
-    df_tabela.columns = ['Nome', 'Município', 'Status', 'Ano', 'Valor (R$)'][: len(colunas_validas)]
-
-    if 'Valor (R$)' in df_tabela.columns:
-        df_tabela['Valor (R$)'] = df_tabela['Valor (R$)'].apply(
-            lambda x: f"R$ {x:,.0f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notna(x) else "—"
+    for col in ['Valor Conveniado', 'Valor Executado']:
+        if col in df_tabela.columns:
+            df_tabela[col] = df_tabela[col].apply(
+                lambda x: formatar_reais(x) if pd.notna(x) else "—"
+            )
+    if 'Área (m²)' in df_tabela.columns:
+        df_tabela['Área (m²)'] = df_tabela['Área (m²)'].apply(
+            lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if pd.notna(x) else "—"
         )
+    if 'Habitantes' in df_tabela.columns:
+        df_tabela['Habitantes'] = df_tabela['Habitantes'].apply(
+            lambda x: f"{int(x):,}".replace(",", ".") if pd.notna(x) else "—"
+        )
+    if 'Ano' in df_tabela.columns:
+        df_tabela['Ano'] = df_tabela['Ano'].apply(
+            lambda x: int(x) if pd.notna(x) else "—"
+        )
+    if 'Status' in df_tabela.columns:
+        df_tabela['Status'] = df_tabela['Status'].fillna('—')
 
-    st.dataframe(
-        df_tabela.reset_index(drop=True),
-        use_container_width=True,
-        height=340
-    )
+    st.dataframe(df_tabela.reset_index(drop=True), use_container_width=True, height=360)
