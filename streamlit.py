@@ -126,6 +126,7 @@ st.markdown("""
 url_planilha   = "https://raw.githubusercontent.com/BryanSprenger/Parques-Urbanos---Instituto-gua-e-Terra/refs/heads/main/Parques%20Urbanos.csv"
 url_municipios = "https://raw.githubusercontent.com/BryanSprenger/Parques-Urbanos---Instituto-gua-e-Terra/refs/heads/main/municipios.geojson"
 url_imagens    = "https://raw.githubusercontent.com/BryanSprenger/Parques-Urbanos---Instituto-gua-e-Terra/main/Imagens/"
+url_fallback   = f"{url_imagens}Placa%20-%20Modelo%20Parques.png"
 
 # ============================================
 # 4. CACHE — CARREGAMENTO E FUNÇÕES DE LIMPEZA
@@ -145,7 +146,6 @@ def _limpar_coord(valor):
     except Exception:
         return None
 
-
 def _limpar_valor_brl(raw):
     """ Converte strings no formato brasileiro 'R$ 1.234.567,89' para float. """
     s = str(raw).strip()
@@ -159,10 +159,8 @@ def _limpar_valor_brl(raw):
     except Exception:
         return None
 
-
 def _limpar_area(raw):
     return _limpar_valor_brl(raw)
-
 
 def _limpar_habitantes(raw):
     """ Evita que o número de habitantes como 9.000 seja lido como 9.0 """
@@ -170,9 +168,7 @@ def _limpar_habitantes(raw):
     if s in ('', 'nan', 'NaN', 'None', '-'):
         return None
     
-    # Remove pontos usados para milhares (ex: "9.000" -> "9000")
     s = s.replace('.', '')
-    # Se por acaso vier com decimais usando vírgula, descartamos
     s = s.split(',')[0]
     
     try:
@@ -180,20 +176,16 @@ def _limpar_habitantes(raw):
     except Exception:
         return None
 
-
 @st.cache_data
 def carregar_dados():
     try:
-        # dtype=str preserva todos os zeros das strings como "9.000", garantindo a precisão do formato brasileiro
         df = pd.read_csv(url_planilha, dtype=str)
     except Exception as e:
         st.error(f"Erro ao acessar a planilha no GitHub. Verifique a URL ou sua conexão. Detalhes: {e}")
         return pd.DataFrame()
     
-    # Normaliza nomes: remove espaços e coloca em minúsculo
     df.columns = df.columns.str.strip().str.lower()
 
-    # Prevenção: criar colunas faltantes essenciais vazias para não quebrar o código
     colunas_esperadas = ['coordenada x', 'coordenada y', 'município', 'ano', 'status', 'valor conveniado', 'valor executado', 'área', 'habitantes', 'endereço']
     for col in colunas_esperadas:
         if col not in df.columns:
@@ -203,12 +195,10 @@ def carregar_dados():
     df['lon'] = df['coordenada y'].apply(_limpar_coord)
     return df
 
-
 @st.cache_data
 def carregar_municipios():
     gdf = gpd.read_file(url_municipios)
     return gdf.to_crs(epsg=4326)
-
 
 # ============================================
 # 5. PREPARAÇÃO DOS DADOS
@@ -221,28 +211,18 @@ def preparar_dados(df):
     df = df.copy()
 
     df['município'] = df['município'].astype(str).str.strip().replace('nan', pd.NA)
-    
     df['ano'] = pd.to_numeric(df['ano'], errors='coerce')
-
-    df['status'] = df['status'].astype(str).str.strip()
-    df['status'] = df['status'].replace('nan', pd.NA)
-
+    df['status'] = df['status'].astype(str).str.strip().replace('nan', pd.NA)
     df['valor_conveniado'] = df['valor conveniado'].apply(_limpar_valor_brl)
     df['valor_executado']  = df['valor executado'].apply(_limpar_valor_brl)
-
     df['area_m2'] = df['área'].apply(_limpar_area)
-
-    # Habitantes agora utiliza o filtro especial criado para os milhares
     df['habitantes'] = df['habitantes'].apply(_limpar_habitantes)
-
     df['endereço'] = df['endereço'].astype(str).str.strip().replace('nan', pd.NA)
 
     return df
 
-
 df  = preparar_dados(carregar_dados())
 gdf = carregar_municipios()
-
 
 # ============================================
 # 6. FUNÇÕES AUXILIARES DE EXIBIÇÃO
@@ -255,28 +235,23 @@ def cor_status(status):
         return "#f39c12"
     return "#95a5a6"
 
-
 def escala_raio(valor, vmin, vmax):
     if pd.isna(valor):
         return 5
     return 5 + (valor - vmin) / (vmax - vmin + 1e-9) * 14
 
-
 def formatar_reais(valor):
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
 
 def formatar_area(valor):
     if pd.isna(valor):
         return "—"
     return f"{valor:,.2f} m²".replace(",", "X").replace(".", ",").replace("X", ".")
 
-
 def formatar_habitantes(valor):
     if pd.isna(valor):
         return "—"
     return f"{int(valor):,}".replace(",", ".") + " hab."
-
 
 def criar_popup_minimo(row):
     nome      = str(row.get('nome oficial do parque', ''))
@@ -288,13 +263,14 @@ def criar_popup_minimo(row):
     status_display = status if status not in ('nan', '', 'None', '<NA>') else 'Não informado'
     img_url = f"{url_imagens}{municipio.strip().replace(' ', '%20')}.png"
 
+    # Inserida a lógica do fallback image no onerror
     html = f"""
     <div style="width:215px;font-family:'Segoe UI',sans-serif;
                 background:#fff;border-radius:10px;overflow:hidden;
                 box-shadow:0 2px 8px rgba(0,0,0,0.12);">
         <img src="{img_url}"
              style="width:100%;height:115px;object-fit:cover;"
-             onerror="this.parentElement.style.paddingTop='8px';this.style.display='none';">
+             onerror="this.onerror=null; this.src='{url_fallback}';">
         <div style="padding:10px 12px 12px;">
             <div style="font-weight:700;color:#1e3d2f;font-size:0.87rem;
                         margin-bottom:4px;line-height:1.3;">{nome_display}</div>
@@ -308,22 +284,16 @@ def criar_popup_minimo(row):
     """
     return folium.Popup(html, max_width=230)
 
-
 def buscar_parque_por_coords(df_base, lat, lon, tolerancia=0.05):
-    """Retorna a linha do parque mais próxima das coordenadas clicadas no mapa."""
     df_geo = df_base.dropna(subset=['lat', 'lon'])
     if df_geo.empty:
         return None
-    # Calcula a diferença entre o clique e os centros de todos os parques
     dist = (df_geo['lat'] - lat).abs() + (df_geo['lon'] - lon).abs()
     idx_min = dist.idxmin()
-    # Retorna o parque se a distância estiver dentro da nova tolerância (maior)
     return df_base.loc[idx_min] if dist[idx_min] < tolerancia else None
-
 
 def str_vazia(v):
     return str(v) in ('nan', '', 'None', '<NA>', 'NaT')
-
 
 # ============================================
 # 7. SIDEBAR — NAVEGAÇÃO E FILTROS
@@ -373,7 +343,6 @@ st.sidebar.markdown("### 🗺️ Opções do Mapa")
 mostrar_cluster = st.sidebar.checkbox("Clusterização", value=False)
 mostrar_heatmap = st.sidebar.checkbox("Mapa de Calor",  value=False)
 
-
 # ============================================
 # 8. FILTRAGEM
 # ============================================
@@ -390,7 +359,6 @@ if filtro_status != "Todos":
     df_filtrado = df_filtrado[df_filtrado['status'] == filtro_status]
 
 df_filtrado = df_filtrado.reset_index(drop=True)
-
 
 # ============================================
 # 9. HOME
@@ -462,7 +430,6 @@ if pagina == "🏠 Home":
         '<span style="background:#95a5a6;color:white;padding:4px 14px;border-radius:20px;font-size:0.82rem;font-weight:700;">— Outros</span>',
         unsafe_allow_html=True)
 
-
 # ============================================
 # 10. MAPA
 # ============================================
@@ -479,7 +446,6 @@ elif pagina == "🗺️ Mapa":
 
     st.markdown("---")
 
-    # --- Mapa base ---
     mapa = folium.Map(location=[-24.5, -51.5], zoom_start=7, tiles=None)
 
     folium.TileLayer('OpenStreetMap', name='Ruas (OSM)').add_to(mapa)
@@ -624,13 +590,14 @@ elif pagina == "🗺️ Mapa":
         col_img, col_info = st.columns([1, 2.4])
 
         with col_img:
+            # Inserida a lógica do fallback image no onerror
             st.markdown(f"""
             <div style="border-radius:12px;overflow:hidden;
                         box-shadow:0 4px 14px rgba(0,0,0,0.10);
                         height:290px;background:#e8f0eb;">
                 <img src="{img_url}"
                      style="width:100%;height:100%;object-fit:cover;"
-                     onerror="this.style.display='none';">
+                     onerror="this.onerror=null; this.src='{url_fallback}';">
             </div>
             """, unsafe_allow_html=True)
 
@@ -689,7 +656,6 @@ elif pagina == "🗺️ Mapa":
                 </div>
             </div>
             """, unsafe_allow_html=True)
-
 
 # ============================================
 # 11. ANÁLISE
