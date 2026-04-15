@@ -128,13 +128,58 @@ url_municipios = "https://raw.githubusercontent.com/BryanSprenger/Parques-Urbano
 url_imagens    = "https://raw.githubusercontent.com/BryanSprenger/Parques-Urbanos---Instituto-gua-e-Terra/main/Imagens/"
 
 # ============================================
-# 4. CACHE — CARREGAMENTO
+# 4. CACHE — CARREGAMENTO E FUNÇÕES DE LIMPEZA
 # ============================================
+
+def _limpar_coord(valor):
+    """ Corrige coordenadas corrompidas do Excel/CSV. """
+    try:
+        s = str(valor).strip()
+        if s in ('', 'nan', 'NaN', 'None'):
+            return None
+        digits = re.sub(r'[^0-9]', '', s)
+        if len(digits) < 3:
+            return None
+        result = float(f'{digits[:2]}.{digits[2:]}')
+        return -abs(result)
+    except Exception:
+        return None
+
+
+def _limpar_valor_brl(raw):
+    """ Converte strings no formato brasileiro 'R$ 1.234.567,89' para float. """
+    s = str(raw).strip()
+    if s in ('', 'nan', 'NaN', 'None', '-'):
+        return None
+    s = re.sub(r'[^\d,.]', '', s)
+    s = s.replace('.', '')
+    s = s.replace(',', '.')
+    try:
+        return float(s)
+    except Exception:
+        return None
+
+
+def _limpar_area(raw):
+    return _limpar_valor_brl(raw)
+
+
 @st.cache_data
 def carregar_dados():
-    df = pd.read_csv(url_planilha)
-    # Normaliza nomes: remove espaços (inclui 'coordenada x ' com trailing space)
+    try:
+        df = pd.read_csv(url_planilha)
+    except Exception as e:
+        st.error(f"Erro ao acessar a planilha no GitHub. Verifique a URL ou sua conexão. Detalhes: {e}")
+        return pd.DataFrame()
+    
+    # Normaliza nomes: remove espaços e coloca em minúsculo
     df.columns = df.columns.str.strip().str.lower()
+
+    # Prevenção: criar colunas faltantes essenciais vazias para não quebrar o código no futuro
+    colunas_esperadas = ['coordenada x', 'coordenada y', 'município', 'ano', 'status', 'valor conveniado', 'valor executado', 'área', 'habitantes', 'endereço']
+    for col in colunas_esperadas:
+        if col not in df.columns:
+            df[col] = pd.NA
 
     df['lat'] = df['coordenada x'].apply(_limpar_coord)
     df['lon'] = df['coordenada y'].apply(_limpar_coord)
@@ -148,80 +193,24 @@ def carregar_municipios():
 
 
 # ============================================
-# 5. FUNÇÕES DE LIMPEZA (definidas antes do cache para serem acessíveis)
-# ============================================
-def _limpar_coord(valor):
-    """
-    Coordenadas chegam em dois formatos corrompidos pelo Excel:
-      • Formato A (lotes antigos): '-2.441.473.920'  → representa -24.41473920
-        O Excel removeu a vírgula decimal e adicionou pontos de milhar.
-      • Formato B (lotes novos):   '-23.994.689'     → representa -23.994689
-        Mesma lógica, apenas menos casas decimais.
-    Ambos os formatos compartilham a mesma correção:
-      1. Remover todos os pontos (separadores de milhar introduzidos pelo Excel)
-      2. Reinserir o decimal após os 2 primeiros dígitos (coordenadas do PR
-         têm sempre 2 dígitos inteiros: lat ~-22 a -26, lon ~-48 a -55)
-      3. Forçar sinal negativo (todas as coordenadas do Paraná são negativas)
-    Também tolera entradas já corretas com vírgula decimal (-24,304103).
-    """
-    try:
-        s = str(valor).strip()
-        if s in ('', 'nan', 'NaN', 'None'):
-            return None
-        # Extrai apenas dígitos
-        digits = re.sub(r'[^0-9]', '', s)
-        if len(digits) < 3:
-            return None
-        # Insere o ponto decimal após os 2 primeiros dígitos
-        result = float(f'{digits[:2]}.{digits[2:]}')
-        # Paraná: sempre negativo
-        return -abs(result)
-    except Exception:
-        return None
-
-
-def _limpar_valor_brl(raw):
-    """
-    Converte strings no formato brasileiro 'R$ 1.234.567,89' para float.
-    Retorna None para células vazias ou marcadores como '-'.
-    """
-    s = str(raw).strip()
-    if s in ('', 'nan', 'NaN', 'None', '-'):
-        return None
-    # Remove tudo que não é dígito, vírgula ou ponto
-    s = re.sub(r'[^\d,.]', '', s)
-    s = s.replace('.', '')   # remove pontos de milhar
-    s = s.replace(',', '.')  # vírgula decimal → ponto
-    try:
-        return float(s)
-    except Exception:
-        return None
-
-
-def _limpar_area(raw):
-    """
-    Área vem como '1.756,46' (m²) — mesmo padrão de valor BRL sem prefixo.
-    """
-    return _limpar_valor_brl(raw)
-
-
-# ============================================
-# 6. PREPARAÇÃO DOS DADOS
+# 5. PREPARAÇÃO DOS DADOS
 # ============================================
 @st.cache_data
 def preparar_dados(df):
+    if df.empty:
+        return df
+
     df = df.copy()
 
-    df['cidade']  = df['cidade'].astype(str).str.strip()
-    df['ano']     = pd.to_numeric(df['ano'], errors='coerce')
+    # Município (substituindo a antiga coluna Cidade)
+    df['município'] = df['município'].astype(str).str.strip().replace('nan', pd.NA)
+    
+    df['ano'] = pd.to_numeric(df['ano'], errors='coerce')
 
-    # Status: preserva NaN intencionalmente (células ainda não preenchidas)
+    # Status: preserva NaN intencionalmente
     df['status'] = df['status'].astype(str).str.strip()
     df['status'] = df['status'].replace('nan', pd.NA)
 
-    # Valores financeiros: duas colunas separadas no novo CSV
-    # 'valor conveniado'  = valor do convênio assinado
-    # 'valor executado'   = valor efetivamente executado ('-' = não executado ainda)
     df['valor_conveniado'] = df['valor conveniado'].apply(_limpar_valor_brl)
     df['valor_executado']  = df['valor executado'].apply(_limpar_valor_brl)
 
@@ -231,7 +220,7 @@ def preparar_dados(df):
     # Habitantes
     df['habitantes'] = pd.to_numeric(df['habitantes'], errors='coerce')
 
-    # Endereço: preserva como string, trata 'nan'
+    # Endereço
     df['endereço'] = df['endereço'].astype(str).str.strip().replace('nan', pd.NA)
 
     return df
@@ -240,8 +229,9 @@ def preparar_dados(df):
 df  = preparar_dados(carregar_dados())
 gdf = carregar_municipios()
 
+
 # ============================================
-# 7. FUNÇÕES AUXILIARES DE EXIBIÇÃO
+# 6. FUNÇÕES AUXILIARES DE EXIBIÇÃO
 # ============================================
 def cor_status(status):
     s = str(status).lower()
@@ -259,12 +249,10 @@ def escala_raio(valor, vmin, vmax):
 
 
 def formatar_reais(valor):
-    """Float → 'R$ 1.234.567,89'"""
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
 def formatar_area(valor):
-    """Float → '1.756,46 m²'"""
     if pd.isna(valor):
         return "—"
     return f"{valor:,.2f} m²".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -277,19 +265,14 @@ def formatar_habitantes(valor):
 
 
 def criar_popup_minimo(row):
-    """
-    Popup compacto exibido ao clicar no marcador.
-    Contém apenas: imagem, nome do parque, cidade e status.
-    As demais informações são exibidas no painel abaixo do mapa.
-    """
-    nome   = str(row.get('nome oficial do parque', ''))
-    cidade = str(row.get('cidade', ''))
-    status = str(row.get('status', ''))
-    cor    = cor_status(status)
+    nome      = str(row.get('nome oficial do parque', ''))
+    municipio = str(row.get('município', ''))
+    status    = str(row.get('status', ''))
+    cor       = cor_status(status)
 
-    nome_display = nome if nome not in ('nan', '', 'None', '<NA>') else cidade
+    nome_display = nome if nome not in ('nan', '', 'None', '<NA>') else municipio
     status_display = status if status not in ('nan', '', 'None', '<NA>') else 'Não informado'
-    img_url = f"{url_imagens}{cidade.strip().replace(' ', '%20')}.png"
+    img_url = f"{url_imagens}{municipio.strip().replace(' ', '%20')}.png"
 
     html = f"""
     <div style="width:215px;font-family:'Segoe UI',sans-serif;
@@ -301,7 +284,7 @@ def criar_popup_minimo(row):
         <div style="padding:10px 12px 12px;">
             <div style="font-weight:700;color:#1e3d2f;font-size:0.87rem;
                         margin-bottom:4px;line-height:1.3;">{nome_display}</div>
-            <div style="color:#666;font-size:0.79rem;margin-bottom:7px;">🏙️ {cidade}</div>
+            <div style="color:#666;font-size:0.79rem;margin-bottom:7px;">🏙️ {municipio}</div>
             <span style="background:{cor};color:white;padding:3px 10px;
                          border-radius:20px;font-size:0.72rem;font-weight:700;">
                 {status_display}
@@ -313,7 +296,6 @@ def criar_popup_minimo(row):
 
 
 def buscar_parque_por_coords(df_base, lat, lon, tolerancia=0.001):
-    """Retorna a linha do parque mais próxima das coordenadas clicadas no mapa."""
     df_geo = df_base.dropna(subset=['lat', 'lon'])
     if df_geo.empty:
         return None
@@ -327,7 +309,7 @@ def str_vazia(v):
 
 
 # ============================================
-# 8. SIDEBAR — NAVEGAÇÃO E FILTROS
+# 7. SIDEBAR — NAVEGAÇÃO E FILTROS
 # ============================================
 st.sidebar.markdown("## 🌳 Parques Urbanos")
 st.sidebar.markdown("**Instituto Água e Terra — Paraná**")
@@ -339,20 +321,21 @@ pagina = st.sidebar.radio(
     label_visibility="collapsed"
 )
 
+if df.empty:
+    st.warning("O conjunto de dados não foi carregado corretamente.")
+    st.stop()
+
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🎛️ Filtros")
 
-# Filtro de período
-ano_min = int(df['ano'].dropna().min())
-ano_max = int(df['ano'].dropna().max())
+ano_min = int(df['ano'].dropna().min()) if not df['ano'].dropna().empty else 2000
+ano_max = int(df['ano'].dropna().max()) if not df['ano'].dropna().empty else 2030
 filtro_ano = st.sidebar.slider("Período", ano_min, ano_max, (ano_min, ano_max), format="%d")
 
-# Filtro de status — inclui "(não preenchido)" para transparência
 _status_unicos = sorted(df['status'].dropna().unique().tolist())
 opcoes_status  = ["Todos"] + _status_unicos
 filtro_status  = st.sidebar.radio("Status", opcoes_status, index=0)
 
-# Filtro de valor conveniado (protegido contra NaN/inf)
 _vals = df['valor_conveniado'].dropna()
 if len(_vals) > 0 and math.isfinite(float(_vals.min())) and math.isfinite(float(_vals.max())):
     _vmin = int(_vals.min())
@@ -373,33 +356,32 @@ st.sidebar.markdown("### 🗺️ Opções do Mapa")
 mostrar_cluster = st.sidebar.checkbox("Clusterização", value=False)
 mostrar_heatmap = st.sidebar.checkbox("Mapa de Calor",  value=False)
 
+
 # ============================================
-# 9. FILTRAGEM
+# 8. FILTRAGEM
 # ============================================
-# Período: mantém linhas sem ano (serão preenchidas futuramente)
 df_filtrado = df[
     df['ano'].between(filtro_ano[0], filtro_ano[1], inclusive='both') | df['ano'].isna()
 ].copy()
 
-# Valor: mantém linhas sem valor (serão preenchidas futuramente)
 df_filtrado = df_filtrado[
     df_filtrado['valor_conveniado'].between(filtro_valor[0], filtro_valor[1], inclusive='both') |
     df_filtrado['valor_conveniado'].isna()
 ]
 
-# Status
 if filtro_status != "Todos":
     df_filtrado = df_filtrado[df_filtrado['status'] == filtro_status]
 
 df_filtrado = df_filtrado.reset_index(drop=True)
 
+
 # ============================================
-# 10. HOME
+# 9. HOME
 # ============================================
 if pagina == "🏠 Home":
 
     st.title("🌳 Parques Urbanos do Paraná")
-    st.markdown("##### Monitoramento e Análise de Investimentos em Áreas Verdes Urbanas")
+    st.markdown("##### Monitoramento e Análise de Investimentos em Áreas Verdes")
     st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
 
     df_home_conv = df.dropna(subset=['valor_conveniado'])
@@ -409,7 +391,7 @@ if pagina == "🏠 Home":
     c1.metric("Parques Cadastrados",   f"{len(df):,}".replace(",", "."))
     c2.metric("Total Conveniado",      formatar_reais(df_home_conv['valor_conveniado'].sum()))
     c3.metric("Total Executado",       formatar_reais(df_home_exec['valor_executado'].sum()))
-    c4.metric("Municípios Atendidos",  df['cidade'].nunique())
+    c4.metric("Municípios Atendidos",  df['município'].nunique())
 
     st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
 
@@ -463,8 +445,9 @@ if pagina == "🏠 Home":
         '<span style="background:#95a5a6;color:white;padding:4px 14px;border-radius:20px;font-size:0.82rem;font-weight:700;">— Outros</span>',
         unsafe_allow_html=True)
 
+
 # ============================================
-# 11. MAPA
+# 10. MAPA
 # ============================================
 elif pagina == "🗺️ Mapa":
 
@@ -475,17 +458,15 @@ elif pagina == "🗺️ Mapa":
     m1.metric("Parques no Filtro",   len(df_filtrado))
     m2.metric("Com Coordenadas",     df_filtrado.dropna(subset=['lat', 'lon']).shape[0])
     m3.metric("Total Conveniado",    formatar_reais(df_mv['valor_conveniado'].sum()) if len(df_mv) else "—")
-    m4.metric("Municípios",          df_filtrado['cidade'].nunique())
+    m4.metric("Municípios",          df_filtrado['município'].nunique())
 
     st.markdown("---")
 
     # --- Mapa base ---
     mapa = folium.Map(location=[-24.5, -51.5], zoom_start=7, tiles=None)
 
-    # Camada 1 (padrão, ativa ao carregar): Ruas OSM
     folium.TileLayer('OpenStreetMap', name='Ruas (OSM)').add_to(mapa)
 
-    # Camada 2 (alternativa): Satélite
     folium.TileLayer(
         tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         attr='Esri World Imagery',
@@ -494,7 +475,6 @@ elif pagina == "🗺️ Mapa":
         control=True
     ).add_to(mapa)
 
-    # Limites dos municípios
     folium.GeoJson(
         gdf,
         style_function=lambda x: {
@@ -506,7 +486,6 @@ elif pagina == "🗺️ Mapa":
         name='Municípios'
     ).add_to(mapa)
 
-    # Escala de raio proporcional ao valor conveniado
     vmin = df_filtrado['valor_conveniado'].min()
     vmax = df_filtrado['valor_conveniado'].max()
 
@@ -522,7 +501,7 @@ elif pagina == "🗺️ Mapa":
 
         nome_tt = str(row.get('nome oficial do parque', ''))
         if str_vazia(nome_tt):
-            nome_tt = str(row.get('cidade', ''))
+            nome_tt = str(row.get('município', ''))
 
         folium.CircleMarker(
             location=[lat, lon],
@@ -564,7 +543,7 @@ elif pagina == "🗺️ Mapa":
     """, unsafe_allow_html=True)
 
     # ----------------------------------------
-    # PAINEL DE DETALHES — abaixo do mapa
+    # PAINEL DE DETALHES
     # ----------------------------------------
     st.markdown("---")
 
@@ -587,7 +566,7 @@ elif pagina == "🗺️ Mapa":
         """, unsafe_allow_html=True)
     else:
         nome      = str(parque.get('nome oficial do parque', ''))
-        cidade    = str(parque.get('cidade', '—'))
+        municipio = str(parque.get('município', '—'))
         status    = str(parque.get('status', ''))
         ano       = parque.get('ano', None)
         v_conv    = parque.get('valor_conveniado', None)
@@ -597,10 +576,10 @@ elif pagina == "🗺️ Mapa":
         endereco  = str(parque.get('endereço', ''))
         maps_url  = str(parque.get('maps', ''))
 
-        nome_display    = nome if not str_vazia(nome) else cidade
+        nome_display    = nome if not str_vazia(nome) else municipio
         status_display  = status if not str_vazia(status) else 'Não preenchido'
         cor             = cor_status(status)
-        img_url         = f"{url_imagens}{cidade.strip().replace(' ', '%20')}.png"
+        img_url         = f"{url_imagens}{municipio.strip().replace(' ', '%20')}.png"
 
         ano_display  = int(ano) if pd.notna(ano) else "—"
         conv_display = formatar_reais(v_conv) if pd.notna(v_conv) else "—"
@@ -609,7 +588,6 @@ elif pagina == "🗺️ Mapa":
         hab_display  = formatar_habitantes(hab)
         end_display  = endereco if not str_vazia(endereco) else "—"
 
-        # Diferença conveniado vs executado
         if pd.notna(v_conv) and pd.notna(v_exec):
             diff = v_exec - v_conv
             sinal = "+" if diff >= 0 else ""
@@ -664,7 +642,7 @@ elif pagina == "🗺️ Mapa":
                 <div class="park-card-body">
                     <div class="detail-row">
                         <span class="detail-label">🏙️ Município</span>
-                        <span class="detail-value">{cidade}</span>
+                        <span class="detail-value">{municipio}</span>
                     </div>
                     <div class="detail-row">
                         <span class="detail-label">📅 Ano do Convênio</span>
@@ -703,8 +681,9 @@ elif pagina == "🗺️ Mapa":
             </div>
             """, unsafe_allow_html=True)
 
+
 # ============================================
-# 12. ANÁLISE
+# 11. ANÁLISE
 # ============================================
 elif pagina == "📊 Análise":
 
@@ -712,7 +691,6 @@ elif pagina == "📊 Análise":
 
     df_valid = df_filtrado.dropna(subset=['valor_conveniado', 'ano'])
 
-    # --- Métricas ---
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Total Conveniado",    formatar_reais(df_valid['valor_conveniado'].sum()) if len(df_valid) else "—")
     c2.metric("Número de Parques",   len(df_filtrado))
@@ -721,7 +699,6 @@ elif pagina == "📊 Análise":
 
     st.markdown("---")
 
-    # --- Linha 1: Conveniado por ano + Status ---
     col_a, col_b = st.columns([2, 1])
 
     with col_a:
@@ -743,7 +720,6 @@ elif pagina == "📊 Análise":
         st.plotly_chart(fig_bar, use_container_width=True)
 
     with col_b:
-        # Status: substitui NaN por rótulo legível apenas para este gráfico
         status_plot = df_filtrado['status'].fillna('Não preenchido')
         status_count = status_plot.value_counts().reset_index()
         status_count.columns = ['status', 'quantidade']
@@ -765,7 +741,6 @@ elif pagina == "📊 Análise":
         fig_pie.update_traces(textinfo='percent+label', showlegend=False)
         st.plotly_chart(fig_pie, use_container_width=True)
 
-    # --- Linha 2: Conveniado vs Executado por ano + Top municípios ---
     col_c, col_d = st.columns(2)
 
     with col_c:
@@ -798,16 +773,16 @@ elif pagina == "📊 Análise":
         st.plotly_chart(fig_comp, use_container_width=True)
 
     with col_d:
-        top_cidades = (
-            df_valid.groupby('cidade')['valor_conveniado']
+        top_municipios = (
+            df_valid.groupby('município')['valor_conveniado']
             .sum().sort_values(ascending=True).tail(12).reset_index()
         )
         fig_h = px.bar(
-            top_cidades, x='valor_conveniado', y='cidade', orientation='h',
+            top_municipios, x='valor_conveniado', y='município', orientation='h',
             title="Top 12 Municípios por Valor Conveniado",
             color='valor_conveniado',
             color_continuous_scale=[[0, '#a8d5a2'], [1, '#1e3d2f']],
-            labels={'valor_conveniado': 'R$', 'cidade': ''}
+            labels={'valor_conveniado': 'R$', 'município': ''}
         )
         fig_h.update_layout(
             plot_bgcolor='white', paper_bgcolor='white',
@@ -818,7 +793,6 @@ elif pagina == "📊 Análise":
         fig_h.update_traces(marker_line_width=0)
         st.plotly_chart(fig_h, use_container_width=True)
 
-    # --- Linha 3: Distribuição de valores + Acumulado ---
     col_e, col_f = st.columns(2)
 
     with col_e:
@@ -853,21 +827,20 @@ elif pagina == "📊 Análise":
         )
         st.plotly_chart(fig_line, use_container_width=True)
 
-    # --- Linha 4: Parques por município + Habitantes ---
     col_g, col_h = st.columns(2)
 
     with col_g:
-        parques_cidade = (
-            df_filtrado.groupby('cidade').size()
+        parques_municipio = (
+            df_filtrado.groupby('município').size()
             .sort_values(ascending=False).head(10)
             .reset_index(name='quantidade')
         )
         fig_pc = px.bar(
-            parques_cidade, x='cidade', y='quantidade',
+            parques_municipio, x='município', y='quantidade',
             title="Top 10 Municípios por Nº de Parques",
             color='quantidade',
             color_continuous_scale=[[0, '#a8d5a2'], [1, '#1e3d2f']],
-            labels={'quantidade': 'Nº de Parques', 'cidade': ''}
+            labels={'quantidade': 'Nº de Parques', 'município': ''}
         )
         fig_pc.update_layout(
             plot_bgcolor='white', paper_bgcolor='white',
@@ -882,13 +855,13 @@ elif pagina == "📊 Análise":
         df_vph = df_filtrado.dropna(subset=['valor_conveniado', 'habitantes']).copy()
         if len(df_vph) > 0:
             df_vph['valor_por_hab'] = df_vph['valor_conveniado'] / df_vph['habitantes']
-            top_vph = df_vph.nlargest(12, 'valor_por_hab')[['cidade', 'valor_por_hab']].sort_values('valor_por_hab')
+            top_vph = df_vph.nlargest(12, 'valor_por_hab')[['município', 'valor_por_hab']].sort_values('valor_por_hab')
             fig_vph = px.bar(
-                top_vph, x='valor_por_hab', y='cidade', orientation='h',
+                top_vph, x='valor_por_hab', y='município', orientation='h',
                 title="Valor Conveniado por Habitante (Top 12)",
                 color='valor_por_hab',
                 color_continuous_scale=[[0, '#a8d5a2'], [1, '#1e3d2f']],
-                labels={'valor_por_hab': 'R$ / Hab.', 'cidade': ''}
+                labels={'valor_por_hab': 'R$ / Hab.', 'município': ''}
             )
             fig_vph.update_layout(
                 plot_bgcolor='white', paper_bgcolor='white',
@@ -905,7 +878,7 @@ elif pagina == "📊 Análise":
 
     cols_map = {
         'nome oficial do parque': 'Nome',
-        'cidade':                 'Município',
+        'município':              'Município',
         'status':                 'Status',
         'ano':                    'Ano',
         'valor_conveniado':       'Valor Conveniado',
