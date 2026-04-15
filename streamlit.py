@@ -167,10 +167,10 @@ def _limpar_habitantes(raw):
     s = str(raw).strip()
     if s in ('', 'nan', 'NaN', 'None', '-'):
         return None
-    
+    # Remove pontos usados para milhares
     s = s.replace('.', '')
+    # Se vier com decimais usando vírgula, descartamos
     s = s.split(',')[0]
-    
     try:
         return float(s)
     except Exception:
@@ -179,11 +179,13 @@ def _limpar_habitantes(raw):
 @st.cache_data
 def carregar_dados():
     try:
+        # dtype=str preserva os zeros garantindo a precisão dos milhares
         df = pd.read_csv(url_planilha, dtype=str)
     except Exception as e:
-        st.error(f"Erro ao acessar a planilha no GitHub. Verifique a URL ou sua conexão. Detalhes: {e}")
+        st.error(f"Erro ao acessar a planilha no GitHub. Detalhes: {e}")
         return pd.DataFrame()
     
+    # Normaliza nomes: remove espaços e coloca em minúsculo
     df.columns = df.columns.str.strip().str.lower()
 
     colunas_esperadas = ['coordenada x', 'coordenada y', 'município', 'ano', 'status', 'valor conveniado', 'valor executado', 'área', 'habitantes', 'endereço']
@@ -263,14 +265,18 @@ def criar_popup_minimo(row):
     status_display = status if status not in ('nan', '', 'None', '<NA>') else 'Não informado'
     img_url = f"{url_imagens}{municipio.strip().replace(' ', '%20')}.png"
 
-    # Inserida a lógica do fallback image no onerror
+    # Truque CSS: A imagem de fallback fica como background da div pai
     html = f"""
     <div style="width:215px;font-family:'Segoe UI',sans-serif;
                 background:#fff;border-radius:10px;overflow:hidden;
                 box-shadow:0 2px 8px rgba(0,0,0,0.12);">
-        <img src="{img_url}"
-             style="width:100%;height:115px;object-fit:cover;"
-             onerror="this.onerror=null; this.src='{url_fallback}';">
+        <div style="width:100%;height:115px;background-image:url('{url_fallback}');
+                    background-size:cover;background-position:center;background-color:#e8f0eb;">
+            <img src="{img_url}"
+                 style="width:100%;height:100%;object-fit:cover;color:transparent;"
+                 alt=""
+                 onerror="this.style.display='none';">
+        </div>
         <div style="padding:10px 12px 12px;">
             <div style="font-weight:700;color:#1e3d2f;font-size:0.87rem;
                         margin-bottom:4px;line-height:1.3;">{nome_display}</div>
@@ -285,6 +291,7 @@ def criar_popup_minimo(row):
     return folium.Popup(html, max_width=230)
 
 def buscar_parque_por_coords(df_base, lat, lon, tolerancia=0.05):
+    """Retorna a linha do parque mais próxima. Tolerância 0.05 atende marcadores gigantes."""
     df_geo = df_base.dropna(subset=['lat', 'lon'])
     if df_geo.empty:
         return None
@@ -590,18 +597,22 @@ elif pagina == "🗺️ Mapa":
         col_img, col_info = st.columns([1, 2.4])
 
         with col_img:
-            # Inserida a lógica do fallback image no onerror
+            # Fallback seguro via CSS Background
             st.markdown(f"""
             <div style="border-radius:12px;overflow:hidden;
                         box-shadow:0 4px 14px rgba(0,0,0,0.10);
-                        height:290px;background:#e8f0eb;">
+                        height:290px;
+                        background-image:url('{url_fallback}');
+                        background-size:cover;background-position:center;background-color:#e8f0eb;">
                 <img src="{img_url}"
-                     style="width:100%;height:100%;object-fit:cover;"
-                     onerror="this.onerror=null; this.src='{url_fallback}';">
+                     style="width:100%;height:100%;object-fit:cover;color:transparent;"
+                     alt=""
+                     onerror="this.style.display='none';">
             </div>
             """, unsafe_allow_html=True)
 
         with col_info:
+            # HTML formatado em uma linha para evitar erro de código no Markdown
             diff_row = (
                 f'<div class="detail-row">'
                 f'<span class="detail-label">📊 Diferença Conv/Exec</span>'
