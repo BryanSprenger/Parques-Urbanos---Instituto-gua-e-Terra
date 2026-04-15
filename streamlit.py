@@ -164,10 +164,28 @@ def _limpar_area(raw):
     return _limpar_valor_brl(raw)
 
 
+def _limpar_habitantes(raw):
+    """ Evita que o número de habitantes como 9.000 seja lido como 9.0 """
+    s = str(raw).strip()
+    if s in ('', 'nan', 'NaN', 'None', '-'):
+        return None
+    
+    # Remove pontos usados para milhares (ex: "9.000" -> "9000")
+    s = s.replace('.', '')
+    # Se por acaso vier com decimais usando vírgula, descartamos
+    s = s.split(',')[0]
+    
+    try:
+        return float(s)
+    except Exception:
+        return None
+
+
 @st.cache_data
 def carregar_dados():
     try:
-        df = pd.read_csv(url_planilha)
+        # dtype=str preserva todos os zeros das strings como "9.000", garantindo a precisão do formato brasileiro
+        df = pd.read_csv(url_planilha, dtype=str)
     except Exception as e:
         st.error(f"Erro ao acessar a planilha no GitHub. Verifique a URL ou sua conexão. Detalhes: {e}")
         return pd.DataFrame()
@@ -175,7 +193,7 @@ def carregar_dados():
     # Normaliza nomes: remove espaços e coloca em minúsculo
     df.columns = df.columns.str.strip().str.lower()
 
-    # Prevenção: criar colunas faltantes essenciais vazias para não quebrar o código no futuro
+    # Prevenção: criar colunas faltantes essenciais vazias para não quebrar o código
     colunas_esperadas = ['coordenada x', 'coordenada y', 'município', 'ano', 'status', 'valor conveniado', 'valor executado', 'área', 'habitantes', 'endereço']
     for col in colunas_esperadas:
         if col not in df.columns:
@@ -202,25 +220,21 @@ def preparar_dados(df):
 
     df = df.copy()
 
-    # Município (substituindo a antiga coluna Cidade)
     df['município'] = df['município'].astype(str).str.strip().replace('nan', pd.NA)
     
     df['ano'] = pd.to_numeric(df['ano'], errors='coerce')
 
-    # Status: preserva NaN intencionalmente
     df['status'] = df['status'].astype(str).str.strip()
     df['status'] = df['status'].replace('nan', pd.NA)
 
     df['valor_conveniado'] = df['valor conveniado'].apply(_limpar_valor_brl)
     df['valor_executado']  = df['valor executado'].apply(_limpar_valor_brl)
 
-    # Área em m²
     df['area_m2'] = df['área'].apply(_limpar_area)
 
-    # Habitantes
-    df['habitantes'] = pd.to_numeric(df['habitantes'], errors='coerce')
+    # Habitantes agora utiliza o filtro especial criado para os milhares
+    df['habitantes'] = df['habitantes'].apply(_limpar_habitantes)
 
-    # Endereço
     df['endereço'] = df['endereço'].astype(str).str.strip().replace('nan', pd.NA)
 
     return df
@@ -606,9 +620,18 @@ elif pagina == "🗺️ Mapa":
 
         col_img, col_info = st.columns([1, 2.4])
 
+        with col_img:
+            st.markdown(f"""
+            <div style="border-radius:12px;overflow:hidden;
+                        box-shadow:0 4px 14px rgba(0,0,0,0.10);
+                        height:290px;background:#e8f0eb;">
+                <img src="{img_url}"
+                     style="width:100%;height:100%;object-fit:cover;"
+                     onerror="this.style.display='none';">
+            </div>
+            """, unsafe_allow_html=True)
+
         with col_info:
-            # CORREÇÃO: Construímos o HTML em uma linha contínua para evitar que 
-            # os espaços em branco ativem o "bloco de código" do Markdown.
             diff_row = (
                 f'<div class="detail-row">'
                 f'<span class="detail-label">📊 Diferença Conv/Exec</span>'
@@ -616,7 +639,6 @@ elif pagina == "🗺️ Mapa":
                 f'</div>'
             ) if diff_display else ""
 
-            # Deixamos a variável {diff_row} totalmente encostada à esquerda
             st.markdown(f"""
             <div class="park-card">
                 <div class="park-card-header">
