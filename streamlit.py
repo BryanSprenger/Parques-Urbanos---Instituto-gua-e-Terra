@@ -606,33 +606,21 @@ elif pagina == "🗺️ Mapa":
 
         col_img, col_info = st.columns([1, 2.4])
 
-        with col_img:
-            st.markdown(f"""
-            <div style="border-radius:12px;overflow:hidden;
-                        box-shadow:0 4px 14px rgba(0,0,0,0.10);
-                        height:290px;background:#e8f0eb;">
-                <img src="{img_url}"
-                     style="width:100%;height:100%;object-fit:cover;"
-                     onerror="this.style.display='none';">
-            </div>
-            """, unsafe_allow_html=True)
-
         with col_info:
-            diff_row = f"""
-                    <div class="detail-row">
-                        <span class="detail-label">📊 Diferença Conv/Exec</span>
-                        <span class="detail-value"
-                              style="color:{diff_color};font-weight:700;">
-                            {diff_display}
-                        </span>
-                    </div>
-            """ if diff_display else ""
+            # CORREÇÃO: Construímos o HTML em uma linha contínua para evitar que 
+            # os espaços em branco ativem o "bloco de código" do Markdown.
+            diff_row = (
+                f'<div class="detail-row">'
+                f'<span class="detail-label">📊 Diferença Conv/Exec</span>'
+                f'<span class="detail-value" style="color:{diff_color};font-weight:700;">{diff_display}</span>'
+                f'</div>'
+            ) if diff_display else ""
 
+            # Deixamos a variável {diff_row} totalmente encostada à esquerda
             st.markdown(f"""
             <div class="park-card">
                 <div class="park-card-header">
-                    <div style="font-size:1.1rem;font-weight:700;
-                                color:white;margin-bottom:7px;line-height:1.3;">
+                    <div style="font-size:1.1rem;font-weight:700;color:white;margin-bottom:7px;line-height:1.3;">
                         {nome_display}
                     </div>
                     <span class="badge-status" style="background:{cor};color:white;">
@@ -650,17 +638,13 @@ elif pagina == "🗺️ Mapa":
                     </div>
                     <div class="detail-row">
                         <span class="detail-label">💰 Valor Conveniado</span>
-                        <span class="detail-value"
-                              style="color:#1e3d2f;font-weight:700;font-size:0.95rem;">
-                            {conv_display}
-                        </span>
+                        <span class="detail-value" style="color:#1e3d2f;font-weight:700;font-size:0.95rem;">{conv_display}</span>
                     </div>
                     <div class="detail-row">
                         <span class="detail-label">✅ Valor Executado</span>
-                        <span class="detail-value"
-                              style="font-weight:700;">{exec_display}</span>
+                        <span class="detail-value" style="font-weight:700;">{exec_display}</span>
                     </div>
-                    {diff_row}
+{diff_row}
                     <div class="detail-row">
                         <span class="detail-label">📐 Área</span>
                         <span class="detail-value">{area_display}</span>
