@@ -309,12 +309,15 @@ def criar_popup_minimo(row):
     return folium.Popup(html, max_width=230)
 
 
-def buscar_parque_por_coords(df_base, lat, lon, tolerancia=0.001):
+def buscar_parque_por_coords(df_base, lat, lon, tolerancia=0.05):
+    """Retorna a linha do parque mais próxima das coordenadas clicadas no mapa."""
     df_geo = df_base.dropna(subset=['lat', 'lon'])
     if df_geo.empty:
         return None
+    # Calcula a diferença entre o clique e os centros de todos os parques
     dist = (df_geo['lat'] - lat).abs() + (df_geo['lon'] - lon).abs()
     idx_min = dist.idxmin()
+    # Retorna o parque se a distância estiver dentro da nova tolerância (maior)
     return df_base.loc[idx_min] if dist[idx_min] < tolerancia else None
 
 
