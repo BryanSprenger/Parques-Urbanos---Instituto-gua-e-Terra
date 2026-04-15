@@ -457,14 +457,7 @@ elif pagina == "🗺️ Mapa":
 
     folium.TileLayer('OpenStreetMap', name='Ruas (OSM)').add_to(mapa)
 
-    folium.TileLayer(
-        tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        attr='Esri World Imagery',
-        name='Satélite (Esri)',
-        overlay=False,
-        control=True
-    ).add_to(mapa)
-
+    
     folium.GeoJson(
         gdf,
         style_function=lambda x: {
