@@ -9,6 +9,8 @@ import folium
 import geopandas as gpd
 import pandas as pd
 import plotly.express as px
+import requests
+import urllib3
 from folium.plugins import MarkerCluster, HeatMap
 
 # ============================================
@@ -167,9 +169,7 @@ def _limpar_habitantes(raw):
     s = str(raw).strip()
     if s in ('', 'nan', 'NaN', 'None', '-'):
         return None
-    # Remove pontos usados para milhares
     s = s.replace('.', '')
-    # Se vier com decimais usando vírgula, descartamos
     s = s.split(',')[0]
     try:
         return float(s)
@@ -179,13 +179,11 @@ def _limpar_habitantes(raw):
 @st.cache_data
 def carregar_dados():
     try:
-        # dtype=str preserva os zeros garantindo a precisão dos milhares
         df = pd.read_csv(url_planilha, dtype=str)
     except Exception as e:
         st.error(f"Erro ao acessar a planilha no GitHub. Detalhes: {e}")
         return pd.DataFrame()
     
-    # Normaliza nomes: remove espaços e coloca em minúsculo
     df.columns = df.columns.str.strip().str.lower()
 
     colunas_esperadas = ['coordenada x', 'coordenada y', 'município', 'ano', 'status', 'valor conveniado', 'valor executado', 'área', 'habitantes', 'endereço']
@@ -201,6 +199,39 @@ def carregar_dados():
 def carregar_municipios():
     gdf = gpd.read_file(url_municipios)
     return gdf.to_crs(epsg=4326)
+
+@st.cache_data(show_spinner="Baixando malha geoambiental do IAT (isso ocorre apenas uma vez)...")
+def carregar_fragilidade():
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    url_base = "https://geopr.iat.pr.gov.br/server/rest/services/00_PUBLICACOES/zee_fragilidade_geoambiental/FeatureServer/0"
+    query_url = f"{url_base}/query?where=1=1&outFields=*&outSR=4326&f=geojson"
+    
+    todas_features = []
+    offset = 0
+    limite_por_pagina = 1000
+
+    while True:
+        url_paginada = f"{query_url}&resultOffset={offset}&resultRecordCount={limite_por_pagina}"
+        try:
+            response = requests.get(url_paginada, verify=False, timeout=30)
+            if response.status_code == 200:
+                dados_pagina = response.json()
+                features_pagina = dados_pagina.get('features', [])
+                if not features_pagina:
+                    break
+                todas_features.extend(features_pagina)
+                if len(features_pagina) < limite_por_pagina:
+                    break
+                offset += limite_por_pagina
+            else:
+                break
+        except Exception:
+            break
+            
+    return {
+        "type": "FeatureCollection",
+        "features": todas_features
+    }
 
 # ============================================
 # 5. PREPARAÇÃO DOS DADOS
@@ -265,7 +296,6 @@ def criar_popup_minimo(row):
     status_display = status if status not in ('nan', '', 'None', '<NA>') else 'Não informado'
     img_url = f"{url_imagens}{municipio.strip().replace(' ', '%20')}.png"
 
-    # Truque CSS: A imagem de fallback fica como background da div pai
     html = f"""
     <div style="width:215px;font-family:'Segoe UI',sans-serif;
                 background:#fff;border-radius:10px;overflow:hidden;
@@ -291,7 +321,6 @@ def criar_popup_minimo(row):
     return folium.Popup(html, max_width=230)
 
 def buscar_parque_por_coords(df_base, lat, lon, tolerancia=0.05):
-    """Retorna a linha do parque mais próxima. Tolerância 0.05 atende marcadores gigantes."""
     df_geo = df_base.dropna(subset=['lat', 'lon'])
     if df_geo.empty:
         return None
@@ -311,7 +340,7 @@ st.sidebar.markdown("---")
 
 pagina = st.sidebar.radio(
     "Navegação",
-    ["🏠 Home", "🗺️ Mapa", "📊 Análise"],
+    ["🏠 Home", "🗺️ Distribuição Espacial dos Parques", "🌍 Fragilidade Geoambiental - Paraná", "📊 Análise"],
     label_visibility="collapsed"
 )
 
@@ -346,9 +375,15 @@ else:
     filtro_valor = (0, 9_999_999_999)
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("### 🗺️ Opções do Mapa")
-mostrar_cluster = st.sidebar.checkbox("Clusterização", value=False)
-mostrar_heatmap = st.sidebar.checkbox("Mapa de Calor",  value=False)
+
+# Opções de mapa escondidas na aba de Geoambiental
+if pagina == "🗺️ Distribuição Espacial dos Parques":
+    st.sidebar.markdown("### 🗺️ Opções do Mapa")
+    mostrar_cluster = st.sidebar.checkbox("Clusterização", value=False)
+    mostrar_heatmap = st.sidebar.checkbox("Mapa de Calor",  value=False)
+else:
+    mostrar_cluster = False
+    mostrar_heatmap = False
 
 # ============================================
 # 8. FILTRAGEM
@@ -438,9 +473,9 @@ if pagina == "🏠 Home":
         unsafe_allow_html=True)
 
 # ============================================
-# 10. MAPA
+# 10. MAPA - DISTRIBUIÇÃO
 # ============================================
-elif pagina == "🗺️ Mapa":
+elif pagina == "🗺️ Distribuição Espacial dos Parques":
 
     st.title("🗺️ Distribuição Espacial dos Parques")
 
@@ -454,10 +489,8 @@ elif pagina == "🗺️ Mapa":
     st.markdown("---")
 
     mapa = folium.Map(location=[-24.5, -51.5], zoom_start=7, tiles=None)
-
     folium.TileLayer('OpenStreetMap', name='Ruas (OSM)').add_to(mapa)
 
-    
     folium.GeoJson(
         gdf,
         style_function=lambda x: {
@@ -590,7 +623,6 @@ elif pagina == "🗺️ Mapa":
         col_img, col_info = st.columns([1, 2.4])
 
         with col_img:
-            # Fallback seguro via CSS Background
             st.markdown(f"""
             <div style="border-radius:12px;overflow:hidden;
                         box-shadow:0 4px 14px rgba(0,0,0,0.10);
@@ -605,7 +637,6 @@ elif pagina == "🗺️ Mapa":
             """, unsafe_allow_html=True)
 
         with col_info:
-            # HTML formatado em uma linha para evitar erro de código no Markdown
             diff_row = (
                 f'<div class="detail-row">'
                 f'<span class="detail-label">📊 Diferença Conv/Exec</span>'
@@ -661,8 +692,100 @@ elif pagina == "🗺️ Mapa":
             </div>
             """, unsafe_allow_html=True)
 
+
 # ============================================
-# 11. ANÁLISE
+# 11. NOVA ABA: FRAGILIDADE GEOAMBIENTAL
+# ============================================
+elif pagina == "🌍 Fragilidade Geoambiental - Paraná":
+    st.title("🌍 Fragilidade Geoambiental do Paraná")
+    st.markdown("Sobreposição dos parques urbanos filtrados com a malha do Zoneamento Ecológico-Econômico (ZEE-PR).")
+    
+    # 1. Carregar os dados do IAT (usando a função com cache criada na seção 4)
+    geojson_completo = carregar_fragilidade()
+
+    # 2. Configurar cores conforme regra solicitada
+    def definir_cores(feature):
+        classe = str(feature['properties'].get('classe_vulnerabilidade', '')).lower()
+        if '4' in classe or 'alta' in classe:
+            cor = '#DA8C8C'
+        elif '3' in classe or 'média' in classe or 'media' in classe:
+            cor = '#FFBD9F'
+        elif '2' in classe or 'baixa' in classe:
+            cor = '#ffefce'
+        elif '1' in classe or 'muito baixa' in classe:
+            cor = '#A9DFBF'
+        elif '5' in classe or 'muito alta' in classe:
+            cor = '#922B21'
+        else:
+            cor = '#D5D8DC'
+            
+        return {
+            'fillColor': cor,
+            'color': '#000000',
+            'weight': 0.3,
+            'fillOpacity': 0.8
+        }
+
+    # 3. Criar mapa base
+    mapa_frag = folium.Map(location=[-24.5, -51.5], zoom_start=7, tiles="cartodbpositron")
+
+    # 4. Adicionar camada Geoambiental
+    if geojson_completo and len(geojson_completo['features']) > 0:
+        folium.GeoJson(
+            geojson_completo,
+            name="Fragilidade Geoambiental - ZEE-PR",
+            style_function=definir_cores,
+            tooltip=folium.GeoJsonTooltip(
+                fields=['classe_vulnerabilidade'], 
+                aliases=['Classe de Fragilidade:'],
+                localize=True
+            )
+        ).add_to(mapa_frag)
+    else:
+        st.warning("A camada do IAT está temporariamente indisponível.")
+
+    # 5. Adicionar os Parques como pontos fixos e simples (conforme requisitado)
+    for _, row in df_filtrado.iterrows():
+        lat, lon = row['lat'], row['lon']
+        if pd.isna(lat) or pd.isna(lon):
+            continue
+
+        cor = cor_status(row['status'])
+        nome_tt = str(row.get('município', 'Parque'))
+
+        folium.CircleMarker(
+            location=[lat, lon],
+            radius=4,            # Tamanho fixo, sem proporção de valor
+            color="#ffffff",     # Bordinha branca para destacar no fundo pastel
+            fill=True,
+            fill_color=cor,
+            fill_opacity=1.0,
+            weight=1,
+            tooltip=f"<b>{nome_tt}</b>"
+        ).add_to(mapa_frag)
+
+    folium.LayerControl(collapsed=False).add_to(mapa_frag)
+
+    # 6. Renderizar
+    st_folium(
+        mapa_frag,
+        width="100%",
+        height=650,
+        returned_objects=[] # Nesta aba, não precisamos capturar cliques
+    )
+
+    st.markdown("""
+    <div style="display:flex;flex-wrap:wrap;gap:18px;margin-top:8px;font-size:0.82rem;color:#666;">
+        <b>Status do Parque (Ponto Mínimo):</b>
+        <span>⬤ <span style="color:#27ae60;font-weight:600;">Concluído</span></span>
+        <span>⬤ <span style="color:#f39c12;font-weight:600;">Em Andamento</span></span>
+        <span>⬤ <span style="color:#95a5a6;font-weight:600;">Outros</span></span>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ============================================
+# 12. ANÁLISE
 # ============================================
 elif pagina == "📊 Análise":
 
