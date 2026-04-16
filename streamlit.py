@@ -722,7 +722,7 @@ elif pagina == "🌍 Fragilidade Geoambiental - Paraná":
             'fillColor': cor,
             'color': '#000000',
             'weight': 0.3,
-            'fillOpacity': 0.4  # <--- Opacidade abaixada aqui
+            'fillOpacity': 1.0  # <--- Opacidade abaixada aqui
         }
 
     # Mapa Base OSM adicionado
