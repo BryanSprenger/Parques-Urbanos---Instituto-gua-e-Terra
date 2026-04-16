@@ -710,11 +710,7 @@ elif pagina == "🌍 Fragilidade Geoambiental - Paraná":
         elif '3' in classe or 'média' in classe or 'media' in classe:
             cor = '#FFBD9F'
         elif '2' in classe or 'baixa' in classe:
-            cor = '#ffefce'
-        elif '1' in classe or 'muito baixa' in classe:
-            cor = '#A9DFBF'
-        elif '5' in classe or 'muito alta' in classe:
-            cor = '#922B21'
+            cor = '#ffefce'        
         else:
             cor = '#D5D8DC'
             
