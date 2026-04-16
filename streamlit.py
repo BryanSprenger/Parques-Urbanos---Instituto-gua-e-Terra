@@ -781,8 +781,7 @@ elif pagina == "🌍 Fragilidade Geoambiental - Paraná":
                     <div style="width:16px;height:16px;background:#DA8C8C;border:1px solid #999;border-radius:3px;"></div> Alta
                 </span>
                 <span style="display:flex; align-items:center; gap:6px;">                    
-                <span style="display:flex; align-items:center; gap:6px;">
-                    <div style="width:16px;height:16px;background:#D5D8DC;border:1px solid #999;border-radius:3px;"></div> Não Mapeado
+                <span style="display:flex; align-items:center; gap:6px;">                    
                 </span>
             </div>
         </div>
