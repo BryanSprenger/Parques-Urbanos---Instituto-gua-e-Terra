@@ -700,10 +700,9 @@ elif pagina == "🌍 Fragilidade Geoambiental - Paraná":
     st.title("🌍 Fragilidade Geoambiental do Paraná")
     st.markdown("Sobreposição dos parques urbanos filtrados com a malha do Zoneamento Ecológico-Econômico (ZEE-PR).")
     
-    # 1. Carregar os dados do IAT (usando a função com cache criada na seção 4)
     geojson_completo = carregar_fragilidade()
 
-    # 2. Configurar cores conforme regra solicitada
+    # Opacidade reduzida (fillOpacity = 0.4) para destacar os pontos em cima
     def definir_cores(feature):
         classe = str(feature['properties'].get('classe_vulnerabilidade', '')).lower()
         if '4' in classe or 'alta' in classe:
@@ -723,28 +722,23 @@ elif pagina == "🌍 Fragilidade Geoambiental - Paraná":
             'fillColor': cor,
             'color': '#000000',
             'weight': 0.3,
-            'fillOpacity': 0.8
+            'fillOpacity': 0.4  # <--- Opacidade abaixada aqui
         }
 
-    # 3. Criar mapa base
-    mapa_frag = folium.Map(location=[-24.5, -51.5], zoom_start=7, tiles="cartodbpositron")
+    # Mapa Base OSM adicionado
+    mapa_frag = folium.Map(location=[-24.5, -51.5], zoom_start=7, tiles=None)
+    folium.TileLayer('OpenStreetMap', name='Ruas (OSM)').add_to(mapa_frag)
 
-    # 4. Adicionar camada Geoambiental
     if geojson_completo and len(geojson_completo['features']) > 0:
         folium.GeoJson(
             geojson_completo,
             name="Fragilidade Geoambiental - ZEE-PR",
-            style_function=definir_cores,
-            tooltip=folium.GeoJsonTooltip(
-                fields=['classe_vulnerabilidade'], 
-                aliases=['Classe de Fragilidade:'],
-                localize=True
-            )
+            style_function=definir_cores
+            # Tooltip automático foi removido daqui
         ).add_to(mapa_frag)
     else:
         st.warning("A camada do IAT está temporariamente indisponível.")
 
-    # 5. Adicionar os Parques como pontos fixos e simples (conforme requisitado)
     for _, row in df_filtrado.iterrows():
         lat, lon = row['lat'], row['lon']
         if pd.isna(lat) or pd.isna(lon):
@@ -753,33 +747,68 @@ elif pagina == "🌍 Fragilidade Geoambiental - Paraná":
         cor = cor_status(row['status'])
         nome_tt = str(row.get('município', 'Parque'))
 
+        # Tamanho do ponto aumentado de 4 para 8
         folium.CircleMarker(
             location=[lat, lon],
-            radius=4,            # Tamanho fixo, sem proporção de valor
-            color="#ffffff",     # Bordinha branca para destacar no fundo pastel
+            radius=8,  # <--- Tamanho do ponto aumentado aqui
+            color="#ffffff",
             fill=True,
             fill_color=cor,
             fill_opacity=1.0,
             weight=1,
-            tooltip=f"<b>{nome_tt}</b>"
+            tooltip=f"<b>{nome_tt}</b>" # Tooltip mantido apenas para os parques
         ).add_to(mapa_frag)
 
     folium.LayerControl(collapsed=False).add_to(mapa_frag)
 
-    # 6. Renderizar
     st_folium(
         mapa_frag,
         width="100%",
         height=650,
-        returned_objects=[] # Nesta aba, não precisamos capturar cliques
+        returned_objects=[]
     )
 
+    # Legendas Externas Adicionadas
     st.markdown("""
-    <div style="display:flex;flex-wrap:wrap;gap:18px;margin-top:8px;font-size:0.82rem;color:#666;">
-        <b>Status do Parque (Ponto Mínimo):</b>
-        <span>⬤ <span style="color:#27ae60;font-weight:600;">Concluído</span></span>
-        <span>⬤ <span style="color:#f39c12;font-weight:600;">Em Andamento</span></span>
-        <span>⬤ <span style="color:#95a5a6;font-weight:600;">Outros</span></span>
+    <div style="background:#fff; border:1px solid #d4e6d4; border-radius:10px; padding:15px; margin-top:10px;">
+        <div style="margin-bottom: 12px;">
+            <b style="color:#1e3d2f; font-size:0.9rem;">🌍 Níveis de Fragilidade Geoambiental (ZEE-PR):</b>
+            <div style="display:flex; flex-wrap:wrap; gap:15px; margin-top:8px; font-size:0.85rem; color:#444;">
+                <span style="display:flex; align-items:center; gap:6px;">
+                    <div style="width:16px;height:16px;background:#A9DFBF;border:1px solid #999;border-radius:3px;"></div> Muito Baixa
+                </span>
+                <span style="display:flex; align-items:center; gap:6px;">
+                    <div style="width:16px;height:16px;background:#ffefce;border:1px solid #999;border-radius:3px;"></div> Baixa
+                </span>
+                <span style="display:flex; align-items:center; gap:6px;">
+                    <div style="width:16px;height:16px;background:#FFBD9F;border:1px solid #999;border-radius:3px;"></div> Média
+                </span>
+                <span style="display:flex; align-items:center; gap:6px;">
+                    <div style="width:16px;height:16px;background:#DA8C8C;border:1px solid #999;border-radius:3px;"></div> Alta
+                </span>
+                <span style="display:flex; align-items:center; gap:6px;">
+                    <div style="width:16px;height:16px;background:#922B21;border:1px solid #999;border-radius:3px;"></div> Muito Alta
+                </span>
+                <span style="display:flex; align-items:center; gap:6px;">
+                    <div style="width:16px;height:16px;background:#D5D8DC;border:1px solid #999;border-radius:3px;"></div> Não Mapeado
+                </span>
+            </div>
+        </div>
+        <hr style="margin: 10px 0; border-color: #f0f4f0;">
+        <div>
+            <b style="color:#1e3d2f; font-size:0.9rem;">📍 Status dos Parques:</b>
+            <div style="display:flex; flex-wrap:wrap; gap:15px; margin-top:8px; font-size:0.85rem; color:#444;">
+                <span style="display:flex; align-items:center; gap:6px;">
+                    <div style="width:12px;height:12px;background:#27ae60;border-radius:50%;"></div> Concluído
+                </span>
+                <span style="display:flex; align-items:center; gap:6px;">
+                    <div style="width:12px;height:12px;background:#f39c12;border-radius:50%;"></div> Em Andamento
+                </span>
+                <span style="display:flex; align-items:center; gap:6px;">
+                    <div style="width:12px;height:12px;background:#95a5a6;border-radius:50%;"></div> Outros
+                </span>
+            </div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
