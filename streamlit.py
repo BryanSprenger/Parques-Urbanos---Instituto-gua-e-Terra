@@ -770,9 +770,7 @@ elif pagina == "🌍 Fragilidade Geoambiental - Paraná":
         <div style="margin-bottom: 12px;">
             <b style="color:#1e3d2f; font-size:0.9rem;">🌍 Níveis de Fragilidade Geoambiental (ZEE-PR):</b>
             <div style="display:flex; flex-wrap:wrap; gap:15px; margin-top:8px; font-size:0.85rem; color:#444;">
-                <span style="display:flex; align-items:center; gap:6px;">
-                    <div style="width:16px;height:16px;background:#A9DFBF;border:1px solid #999;border-radius:3px;"></div> Muito Baixa
-                </span>
+                <span style="display:flex; align-items:center; gap:6px;">                    
                 <span style="display:flex; align-items:center; gap:6px;">
                     <div style="width:16px;height:16px;background:#ffefce;border:1px solid #999;border-radius:3px;"></div> Baixa
                 </span>
@@ -782,9 +780,7 @@ elif pagina == "🌍 Fragilidade Geoambiental - Paraná":
                 <span style="display:flex; align-items:center; gap:6px;">
                     <div style="width:16px;height:16px;background:#DA8C8C;border:1px solid #999;border-radius:3px;"></div> Alta
                 </span>
-                <span style="display:flex; align-items:center; gap:6px;">
-                    <div style="width:16px;height:16px;background:#922B21;border:1px solid #999;border-radius:3px;"></div> Muito Alta
-                </span>
+                <span style="display:flex; align-items:center; gap:6px;">                    
                 <span style="display:flex; align-items:center; gap:6px;">
                     <div style="width:16px;height:16px;background:#D5D8DC;border:1px solid #999;border-radius:3px;"></div> Não Mapeado
                 </span>
